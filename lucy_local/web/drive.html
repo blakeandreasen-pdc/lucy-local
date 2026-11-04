@@ -7,7 +7,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>Drive · lucy-local</title>
-<link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="static/app.css">
 <style>
 html, body { height: 100%; overflow: hidden; background: #000; touch-action: none; user-select: none; -webkit-user-select: none; overscroll-behavior: none; }
 .glass { background: rgba(18, 20, 34, .62); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,.14); }
@@ -74,7 +74,7 @@ kbd { background: rgba(255,255,255,.12); border-radius: 4px; padding: 0 5px; fon
   <button class="ib glass" id="talk-btn" title="Talk through the robot's speaker (T)">🎤</button>
   <button class="ib glass" id="fs-btn" title="Full screen (F)">⛶</button>
   <button class="ib glass" id="help-btn" title="Help (?)">?</button>
-  <a class="btn ib glass" href="/" title="Dashboard">☰</a>
+  <a class="btn ib glass" href="./" title="Dashboard">☰</a>
 </div>
 
 <div id="readout" class="glass"></div>
@@ -107,7 +107,7 @@ kbd { background: rgba(255,255,255,.12); border-radius: 4px; padding: 0 5px; fon
   <div class="row"><span class="grow"></span><button onclick="$('help').classList.remove('show')">Got it</button></div>
 </div></div>
 
-<script src="/static/app.js"></script>
+<script src="static/app.js"></script>
 <script>
 'use strict';
 
@@ -147,7 +147,7 @@ const talk = Talk((st, msg) => {
 });
 $('talk-btn').onclick = () => talk.toggle();
 $('talk-btn').hidden = true;
-api('/api/actions').then((a) => { $('talk-btn').hidden = !a.talk_start; }).catch(() => {});
+api('api/actions').then((a) => { $('talk-btn').hidden = !a.talk_start; }).catch(() => {});
 
 liveStatus();
 
@@ -156,7 +156,7 @@ liveStatus();
 // every change and every 250 ms while held.
 let ws = null, wsReady = false;
 function connectWs() {
-  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/api/drive/ws');
+  ws = new WebSocket(new URL('api/drive/ws', location.href).href.replace(/^http/, 'ws'));
   ws.onopen = () => { wsReady = true; };
   ws.onclose = () => { wsReady = false; setTimeout(connectWs, 1500); };
   ws.onmessage = (e) => {

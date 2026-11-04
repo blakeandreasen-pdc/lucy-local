@@ -52,12 +52,13 @@ class GotoBody(BaseModel):
     y: float = Field(ge=-GOTO_LIMIT, le=GOTO_LIMIT)
 
 
-def _mediamtx(method: str, path: str, body: bytes | None = None, ctype: str | None = None):
+def _mediamtx(method: str, path: str, body: bytes | None = None, ctype: str | None = None,
+              timeout: float = 10):
     req = urllib.request.Request(MEDIAMTX_WEBRTC + path, data=body, method=method)
     if ctype:
         req.add_header("Content-Type", ctype)
     try:
-        with urllib.request.urlopen(req, timeout=10) as r:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
             return r.status, r.headers.get("Location"), r.read()
     except urllib.error.HTTPError as e:
         return e.code, None, e.read()
@@ -214,7 +215,8 @@ def create_app(robot: Robot, profiles: ProfileStore, driver: Driver, scheduler: 
             raise HTTPException(502, f"media server unreachable: {e}")
         headers = {}
         if location and location.startswith("/talk/whip/"):
-            headers["Location"] = "/api/talk/whip/" + location.rsplit("/", 1)[1]
+            # relative to this URL, so it also works under a path prefix (HA ingress)
+            headers["Location"] = "whip/" + location.rsplit("/", 1)[1]
         return Response(answer, status_code=status, headers=headers,
                         media_type="application/sdp" if status < 300 else "text/plain")
 
@@ -224,6 +226,35 @@ def create_app(robot: Robot, profiles: ProfileStore, driver: Driver, scheduler: 
             raise HTTPException(400, "bad session id")
         try:
             status, _, _ = await asyncio.to_thread(_mediamtx, "DELETE", f"/talk/whip/{session}")
+        except OSError:
+            status = 502
+        return Response(status_code=200 if status < 300 else status)
+
+    # ------------------------------------------------------------ camera signalling
+    @app.post("/api/camera/whep")
+    async def camera_whep(request: Request):
+        """WHEP offer for the camera, passed to MediaMTX path "lucy". Waits while MediaMTX wakes
+        the robot's stream (runOnDemand, up to 40 s)."""
+        sdp = await request.body()
+        if len(sdp) > 64_000:
+            raise HTTPException(413, "offer too large")
+        try:
+            status, location, answer = await asyncio.to_thread(
+                _mediamtx, "POST", "/lucy/whep", sdp, "application/sdp", 50)
+        except OSError as e:
+            raise HTTPException(502, f"media server unreachable: {e}")
+        headers = {}
+        if location and location.startswith("/lucy/whep/"):
+            headers["Location"] = "whep/" + location.rsplit("/", 1)[1]
+        return Response(answer, status_code=status, headers=headers,
+                        media_type="application/sdp" if status < 300 else "text/plain")
+
+    @app.delete("/api/camera/whep/{session}")
+    async def camera_whep_end(session: str):
+        if not WHIP_SESSION.match(session):
+            raise HTTPException(400, "bad session id")
+        try:
+            status, _, _ = await asyncio.to_thread(_mediamtx, "DELETE", f"/lucy/whep/{session}")
         except OSError:
             status = 502
         return Response(status_code=200 if status < 300 else status)

@@ -52,7 +52,7 @@ The `ha-addon/` folder runs lucy-local and MediaMTX together as a Supervisor add
 2. Install **Lucy Local**, set **Server IP** to the HA host's LAN address, and start it.
 3. Point the DNS entries at the HA host instead, and reboot the robot.
 
-The add-on uses the same ports as the compose stack, and its web UI is on 8110. If 443 is taken on the HA host, clear it under the add-on's **Network** settings; the robot only uses it for update checks. Bump `version` in `ha-addon/config.yaml` to ship a new build to HA.
+The web UI opens inside Home Assistant (sidebar entry, through ingress); it's also on port 8110, which the integration uses. The add-on uses the same robot and camera ports as the compose stack. If 443 is taken on the HA host, clear it under the add-on's **Network** settings; the robot only uses it for update checks. Bump `version` in `ha-addon/config.yaml` to ship a new build to HA.
 
 ## Control profiles
 
@@ -106,16 +106,15 @@ On **Settings → Home Assistant**, enter your MQTT broker (for example the Mosq
 
 ## Behind a reverse proxy
 
-The camera pages look for `/lucy/whep` on their own address first, then fall back to `:8889`. Behind an HTTPS proxy, route that path to MediaMTX:
+All the pages' URLs are relative and the camera's signalling goes through lucy-local (`/api/camera/whep`), so one proxy rule (plus the WebSocket upgrade) is enough, on any path prefix:
 
 ```nginx
-location /lucy/whep { proxy_pass http://<host>:8889; proxy_buffering off; }
 location /api/drive/ws { proxy_pass http://<host>:8110; proxy_http_version 1.1;
   proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "upgrade"; }
 location / { proxy_pass http://<host>:8110; proxy_buffering off; }
 ```
 
-The video itself goes straight from the browser to `SERVER_IP:8189/udp`, so viewers need a route to that address (LAN or VPN). The same goes for Talk audio. Talk's signalling goes through lucy-local (`/api/talk/whip`), so it needs no extra proxy rule.
+The video itself goes straight from the browser to `SERVER_IP:8189/udp`, so viewers need a route to that address (LAN or VPN). The same goes for Talk audio.
 
 ## Security
 

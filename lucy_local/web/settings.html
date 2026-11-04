@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Settings · lucy-local</title>
-<link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="static/app.css">
 <style>
 .cmd-row { display: grid; grid-template-columns: 70px minmax(0, 1fr) minmax(0, 1fr) 58px auto auto; gap: 6px; align-items: center; }
 .cmd-row.dp { grid-template-columns: 70px 58px minmax(0, 2fr) auto auto; }
@@ -88,7 +88,7 @@
     <div class="row"><span class="note grow">The password is kept in the data volume (owner-only file), or set HA_MQTT_PASSWORD in .env instead.</span><button class="primary" id="ha-save">Save</button></div>
   </section>
 </main>
-<script src="/static/app.js"></script>
+<script src="static/app.js"></script>
 <script>
 'use strict';
 topbar('settings');
@@ -100,7 +100,7 @@ let store = null, editing = null, dirty = false;
 function markDirty(v = true) { dirty = v; $('dirty').textContent = v ? 'Unsaved changes' : ''; }
 
 async function loadProfiles(selectId) {
-  store = await api('/api/profiles');
+  store = await api('api/profiles');
   const sel = $('prof-select');
   sel.replaceChildren(...Object.values(store.profiles).map((p) =>
     h('option', {value: p.id}, p.name + (p.builtin ? ' (built-in)' : '') + (p.id === store.active ? ' ✓ active' : ''))));
@@ -172,7 +172,7 @@ async function testCmd(c) {
   if (cmd.type === 'rx' && /^MANCTRL$/i.test(cmd.cmd) && /^ANGLE:[1-9]/.test(cmd.data) &&
       !confirm('This makes the robot move for about 2 seconds. It needs manual mode first (test "Enter manual mode"). Send?')) return;
   try {
-    const r = await api('/api/send', {body: cmd});
+    const r = await api('api/send', {body: cmd});
     toast('Sent');
     showReplies(r.responses);
   } catch (e) { toast(e.message, true); }
@@ -182,7 +182,7 @@ function showReplies(rs) {
   $('replies').replaceChildren(...(rs || []).slice().reverse().map((r) =>
     h('div', {}, r.ts.slice(11) + '  ' + r.cmd + (r.data ? ' = ' + r.data : '') + '  (key ' + r.key + ')')));
 }
-api('/api/responses?limit=8').then(showReplies).catch(() => {});
+api('api/responses?limit=8').then(showReplies).catch(() => {});
 
 function renderStatusNames(ro) {
   const box = $('status-names');
@@ -208,7 +208,7 @@ function collectStatus() {
 $('add-status').onclick = () => { editing.status_names[''] = ''; renderStatusNames(false); };
 
 $('prof-use').onclick = async () => {
-  try { await api('/api/profiles/active', {body: {id: editing.id}}); toast('Now using ' + editing.name); await loadProfiles(editing.id); }
+  try { await api('api/profiles/active', {body: {id: editing.id}}); toast('Now using ' + editing.name); await loadProfiles(editing.id); }
   catch (e) { toast(e.message, true); }
 };
 $('prof-copy').onclick = async () => {
@@ -218,17 +218,17 @@ $('prof-copy').onclick = async () => {
   if (store.profiles[id]) return toast('A profile with id "' + id + '" exists already', true);
   collectStatus();
   const copy = {...structuredClone(editing), id, name, builtin: false};
-  try { await api('/api/profiles/' + id, {method: 'PUT', body: copy}); markDirty(false); toast('Saved copy. Choose "Use this profile" to switch to it.'); await loadProfiles(id); }
+  try { await api('api/profiles/' + id, {method: 'PUT', body: copy}); markDirty(false); toast('Saved copy. Choose "Use this profile" to switch to it.'); await loadProfiles(id); }
   catch (e) { toast(e.message, true); }
 };
 $('prof-save').onclick = async () => {
   collectStatus();
-  try { await api('/api/profiles/' + editing.id, {method: 'PUT', body: editing}); markDirty(false); toast('Profile saved'); await loadProfiles(editing.id); }
+  try { await api('api/profiles/' + editing.id, {method: 'PUT', body: editing}); markDirty(false); toast('Profile saved'); await loadProfiles(editing.id); }
   catch (e) { toast(e.message, true); }
 };
 $('prof-delete').onclick = async () => {
   if (!confirm('Delete profile "' + editing.name + '"?')) return;
-  try { await api('/api/profiles/' + editing.id, {method: 'DELETE'}); markDirty(false); toast('Deleted'); await loadProfiles(); }
+  try { await api('api/profiles/' + editing.id, {method: 'DELETE'}); markDirty(false); toast('Deleted'); await loadProfiles(); }
   catch (e) { toast(e.message, true); }
 };
 window.addEventListener('beforeunload', (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
@@ -245,7 +245,7 @@ function fillScheduleActions() {
 }
 
 async function loadSchedule() {
-  const s = await api('/api/schedule');
+  const s = await api('api/schedule');
   const labels = store ? store.profiles[store.active].actions : {};
   $('sched-body').replaceChildren(...(s.entries.length ? s.entries.map((e) => h('tr', {},
     h('td', {}, e.time),
@@ -253,16 +253,16 @@ async function loadSchedule() {
     h('td', {}, (labels[e.action] || {}).label || e.action),
     h('td', {}, e.value ?? (e.suction != null ? 'suction ' + e.suction : '')),
     h('td', {}, h('input', {type: 'checkbox', checked: e.enabled, 'aria-label': 'Enabled', onchange: async (ev) => {
-      try { await api('/api/schedule', {body: {...e, enabled: ev.target.checked}}); toast('Updated'); } catch (x) { toast(x.message, true); }
+      try { await api('api/schedule', {body: {...e, enabled: ev.target.checked}}); toast('Updated'); } catch (x) { toast(x.message, true); }
     }})),
-    h('td', {}, h('button', {class: 'ghost small', onclick: async () => { await api('/api/schedule/' + e.id, {method: 'DELETE'}); loadSchedule(); }}, 'Delete'))))
+    h('td', {}, h('button', {class: 'ghost small', onclick: async () => { await api('api/schedule/' + e.id, {method: 'DELETE'}); loadSchedule(); }}, 'Delete'))))
     : [h('tr', {}, h('td', {colspan: 6, class: 'muted'}, 'Nothing scheduled yet.'))]));
 }
 $('s-add').onclick = async () => {
   const days = [...document.querySelectorAll('#s-days input:checked')].map((x) => +x.value);
   const num = (id) => $(id).value === '' ? null : +$(id).value;
   try {
-    await api('/api/schedule', {body: {time: $('s-time').value, days, action: $('s-action').value, value: num('s-value'), suction: num('s-suction')}});
+    await api('api/schedule', {body: {time: $('s-time').value, days, action: $('s-action').value, value: num('s-value'), suction: num('s-suction')}});
     toast('Schedule added'); loadSchedule();
   } catch (e) { toast(e.message, true); }
 };
@@ -270,7 +270,7 @@ $('s-add').onclick = async () => {
 // ---------------------------------------------------------------- Home Assistant + presets
 let settings = null;
 async function loadSettings() {
-  settings = await api('/api/settings');
+  settings = await api('api/settings');
   const ha = settings.homeassistant;
   $('ha-enabled').value = String(ha.enabled); $('ha-host').value = ha.host; $('ha-port').value = ha.port;
   $('ha-user').value = ha.username; $('ha-pass').value = ha.password; $('ha-prefix').value = ha.discovery_prefix; $('ha-name').value = ha.name;
@@ -283,12 +283,12 @@ $('ha-save').onclick = async () => {
   const body = {homeassistant: {enabled: $('ha-enabled').value === 'true', host: $('ha-host').value.trim(), port: +$('ha-port').value,
     username: $('ha-user').value, password: $('ha-pass').value, discovery_prefix: $('ha-prefix').value.trim() || 'homeassistant',
     name: $('ha-name').value.trim() || 'Trifo'}, suction_presets: presets};
-  try { await api('/api/settings', {method: 'PUT', body}); toast('Saved'); setTimeout(haStatus, 2500); loadSettings(); }
+  try { await api('api/settings', {method: 'PUT', body}); toast('Saved'); setTimeout(haStatus, 2500); loadSettings(); }
   catch (e) { toast(e.message, true); }
 };
 async function haStatus() {
   try {
-    const s = await api('/api/status');
+    const s = await api('api/status');
     const ha = s.homeassistant;
     const on = settings && settings.homeassistant.enabled;
     $('ha-dot').className = 'dot ' + (!on ? '' : ha.connected ? 'ok' : 'bad');

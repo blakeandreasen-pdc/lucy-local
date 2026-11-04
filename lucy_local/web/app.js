@@ -42,7 +42,7 @@ function toast(msg, err) {
 
 async function act(name, value) {
   try {
-    await api('/api/action/' + name, {body: value === undefined ? {} : {value}});
+    await api('api/action/' + name, {body: value === undefined ? {} : {value}});
     return true;
   } catch (e) { toast(e.message, true); return false; }
 }
@@ -60,10 +60,10 @@ function liveStatus(onStatus) {
     if (conn) conn.textContent = s.online ? s.name : 'offline';
     onStatus && onStatus(s);
   };
-  api('/api/status').then(apply).catch(() => {});
+  api('api/status').then(apply).catch(() => {});
   let es;
   const connect = () => {
-    es = new EventSource('/api/events');
+    es = new EventSource('api/events');
     es.onmessage = (e) => { try { apply(JSON.parse(e.data)); } catch (_) {} };
     es.onerror = () => { es.close(); setTimeout(connect, 3000); };
   };
@@ -74,7 +74,7 @@ function topbar(active) {
   const link = (href, label, key) => h('a', {href, class: active === key ? 'on' : null}, label);
   const bar = h('header', {class: 'topbar'},
     h('div', {class: 'brand'}, '🧹 lucy-local'),
-    h('nav', {class: 'nav'}, link('/', 'Dashboard', 'home'), link('/drive', 'Drive', 'drive'), link('/settings', 'Settings', 'settings')),
+    h('nav', {class: 'nav'}, link('./', 'Dashboard', 'home'), link('drive', 'Drive', 'drive'), link('settings', 'Settings', 'settings')),
     h('span', {class: 'grow'}),
     h('div', {class: 'chips'},
       h('span', {class: 'chip'}, h('span', {class: 'dot', id: 'conn-dot'}), h('span', {id: 'conn'}, '…')),
@@ -83,14 +83,10 @@ function topbar(active) {
 }
 
 // ---- camera over WebRTC (WHEP) from MediaMTX; reading path "lucy" wakes the robot's stream.
-// Same origin /lucy/whep when a reverse proxy routes it, else MediaMTX on :8889.
+// Signalling goes through lucy-local (api/camera/whep), so it works on any origin, under a
+// path prefix (Home Assistant ingress) and over HTTPS; the video itself is UDP 8189 direct.
 const Camera = (() => {
-  const SAME = location.origin + '/lucy/whep';
-  const DIRECT = location.protocol + '//' + location.hostname + ':8889/lucy/whep';
-  let url = DIRECT, probe = null;
-  const whep = () => probe || (probe = fetch(SAME, {method: 'OPTIONS'})
-    .then((r) => { if (r.ok && /PATCH/.test(r.headers.get('Access-Control-Allow-Methods') || '')) url = SAME; })
-    .catch(() => {}).then(() => url));
+  const url = new URL('api/camera/whep', location.href).href;
 
   return function (video, onState) {
     let pc = null, session = null, starting = null;
@@ -119,7 +115,7 @@ const Camera = (() => {
           const t = setTimeout(r, 2000);
           conn.addEventListener('icegatheringstatechange', () => { if (conn.iceGatheringState === 'complete') { clearTimeout(t); r(); } });
         });
-        const res = await fetch(await whep(), {method: 'POST', headers: {'Content-Type': 'application/sdp'}, body: conn.localDescription.sdp});
+        const res = await fetch(url, {method: 'POST', headers: {'Content-Type': 'application/sdp'}, body: conn.localDescription.sdp});
         if (!res.ok) throw new Error('camera server returned ' + res.status + (res.status === 404 ? ' (robot did not start streaming)' : ''));
         session = res.headers.get('Location');
         await conn.setRemoteDescription({type: 'answer', sdp: await res.text()});
@@ -229,7 +225,7 @@ function MapView(canvas, onInfo, opts = {}) {
     if (document.hidden) return;
     age();
     try {
-      const r = await api('/api/map?since=' + last);
+      const r = await api('api/map?since=' + last);
       if (!r.supported) { info('This robot profile has no map command'); return stop(); }
       if (r.changed) { map = r; last = r.received; draw(); }
       else if (!map) info('Asking the robot for its map… (about 10 s)');
@@ -258,6 +254,7 @@ function MapView(canvas, onInfo, opts = {}) {
 // Browsers only allow the microphone on HTTPS pages (or localhost).
 // onState('starting'|'on'|'off'|'error', message)
 function Talk(onState) {
+  const TALK_WHIP = new URL('api/talk/whip', location.href).href;
   let pc = null, session = null, mic = null, ping = null, busy = false, told = false;
   const set = (s, m) => onState && onState(s, m);
   async function start() {
@@ -277,7 +274,7 @@ function Talk(onState) {
         const t = setTimeout(r, 2000);
         pc.addEventListener('icegatheringstatechange', () => { if (pc && pc.iceGatheringState === 'complete') { clearTimeout(t); r(); } });
       });
-      const res = await fetch('/api/talk/whip', {method: 'POST', headers: {'Content-Type': 'application/sdp'}, body: pc.localDescription.sdp});
+      const res = await fetch(TALK_WHIP, {method: 'POST', headers: {'Content-Type': 'application/sdp'}, body: pc.localDescription.sdp});
       if (!res.ok) throw new Error('media server returned ' + res.status);
       session = res.headers.get('Location');
       await pc.setRemoteDescription({type: 'answer', sdp: await res.text()});
@@ -287,8 +284,8 @@ function Talk(onState) {
         pc.addEventListener('connectionstatechange', check); check();
       });
       told = true;
-      await api('/api/talk', {body: {on: true}});
-      ping = setInterval(() => api('/api/talk', {body: {on: true}}).catch(() => {}), 3000);
+      await api('api/talk', {body: {on: true}});
+      ping = setInterval(() => api('api/talk', {body: {on: true}}).catch(() => {}), 3000);
       pc.addEventListener('connectionstatechange', () => { if (pc && ['failed', 'disconnected'].includes(pc.connectionState)) stop('dropped'); });
       set('on');
     } catch (e) {
@@ -300,14 +297,14 @@ function Talk(onState) {
     clearInterval(ping); ping = null;
     // tell the robot first, so it isn't left reconnecting to a stream that's gone. Only if this
     // page started the talk: a failed start must not cut off someone else who is talking.
-    if (told) { told = false; await api('/api/talk', {body: {on: false}}).catch(() => {}); }
+    if (told) { told = false; await api('api/talk', {body: {on: false}}).catch(() => {}); }
     if (pc) { pc.close(); pc = null; }
-    if (session) { fetch(session, {method: 'DELETE', keepalive: true}).catch(() => {}); session = null; }
+    if (session) { fetch(new URL(session, TALK_WHIP), {method: 'DELETE', keepalive: true}).catch(() => {}); session = null; }
     if (mic) { mic.getTracks().forEach((t) => t.stop()); mic = null; }
     set(reason === 'dropped' ? 'error' : 'off', reason === 'dropped' ? 'connection dropped' : undefined);
   }
   addEventListener('pagehide', () => {
-    if (told) fetch('/api/talk', {method: 'POST', keepalive: true, headers: {'Content-Type': 'application/json'}, body: '{"on":false}'}).catch(() => {});
+    if (told) fetch('api/talk', {method: 'POST', keepalive: true, headers: {'Content-Type': 'application/json'}, body: '{"on":false}'}).catch(() => {});
   });
   return {start, stop, toggle: () => (pc ? stop() : start()), get on() { return !!pc; }};
 }

@@ -1,5 +1,5 @@
 name: Lucy Local
-version: "0.1.0"
+version: "0.1.1"
 slug: lucy_local
 description: Local cloud for Trifo robot vacuums (Max, Lucy), with camera, map and control panel
 url: https://github.com/blakeandreasen-pdc/lucy-local
@@ -11,7 +11,11 @@ image: ghcr.io/blakeandreasen-pdc/lucy-local-addon-{arch}
 startup: services
 boot: auto
 init: false
-webui: "http://[HOST]:[PORT:8080]"
+# the web UI inside Home Assistant (sidebar), proxied by the Supervisor; also on 8110 for the integration
+ingress: true
+ingress_port: 8080
+panel_icon: mdi:robot-vacuum
+panel_title: Robot vacuum
 watchdog: "http://[HOST]:[PORT:8080]/health"
 ports:
   443/tcp: 443

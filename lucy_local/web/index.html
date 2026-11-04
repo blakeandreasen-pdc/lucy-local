@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>lucy-local</title>
-<link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="static/app.css">
 </head>
 <body>
 <main class="page">
@@ -16,7 +16,7 @@
         <button id="cam-btn">Start</button>
         <button id="snap-btn" title="Snapshot">Snapshot</button>
         <button id="talk-btn" title="Talk through the robot's speaker">🎤 Talk</button>
-        <a class="btn" href="/drive">Drive ›</a>
+        <a class="btn" href="drive">Drive ›</a>
       </div>
       <div class="video">
         <video id="video" muted playsinline autoplay></video>
@@ -66,7 +66,7 @@
       </section>
 
       <section class="card">
-        <div class="card-head"><h2>Schedule</h2><span class="grow"></span><a href="/settings#schedule" class="small">Edit ›</a></div>
+        <div class="card-head"><h2>Schedule</h2><span class="grow"></span><a href="settings#schedule" class="small">Edit ›</a></div>
         <div id="sched" class="small muted">--</div>
       </section>
     </div>
@@ -77,7 +77,7 @@
     <div class="log" id="log"></div>
   </section>
 </main>
-<script src="/static/app.js"></script>
+<script src="static/app.js"></script>
 <script>
 'use strict';
 topbar('home');
@@ -120,7 +120,7 @@ const talk = Talk((s, msg) => {
 });
 $('talk-btn').onclick = () => talk.toggle();
 $('talk-btn').hidden = true;
-api('/api/actions').then((a) => { $('talk-btn').hidden = !a.talk_start; }).catch(() => {});
+api('api/actions').then((a) => { $('talk-btn').hidden = !a.talk_start; }).catch(() => {});
 
 // ---- map: refreshes while this page is open
 let gotoTarget = null, canGoto = false;
@@ -132,13 +132,13 @@ const mapView = MapView($('map'), (t) => { $('map-info').textContent = t; }, {on
   $('goto-bar').hidden = false;
 }});
 mapView.start();
-api('/api/actions').then((a) => { canGoto = !!a.goto; $('goto-hint').hidden = !canGoto; }).catch(() => {});
+api('api/actions').then((a) => { canGoto = !!a.goto; $('goto-hint').hidden = !canGoto; }).catch(() => {});
 $('goto-cancel').onclick = () => { gotoTarget = null; mapView.mark(null); $('goto-bar').hidden = true; };
 $('goto-go').onclick = async () => {
   if (!gotoTarget) return;
   $('goto-go').disabled = true;
   try {
-    await api('/api/goto', {body: gotoTarget});
+    await api('api/goto', {body: gotoTarget});
     $('goto-info').textContent = 'Sent. The robot takes up to a minute to start moving.';
     setTimeout(() => { $('goto-bar').hidden = true; }, 4000);
   } catch (e) { $('goto-info').textContent = 'Failed: ' + e.message; }
@@ -157,7 +157,7 @@ const setSuction = slider('suction', 'set_suction');
 const setVolume = slider('volume', 'set_volume');
 $('mute-btn').onclick = () => act('mute');
 $('unmute-btn').onclick = () => act('unmute');
-api('/api/actions').then((a) => {
+api('api/actions').then((a) => {
   // profiles with a separate unmute (the Max's VOICE 0/1) get two buttons instead of a toggle
   if (a.unmute) { $('mute-btn').textContent = a.mute.label; $('unmute-btn').textContent = a.unmute.label; $('unmute-btn').hidden = false; }
   // the robot only confirms "OK", so the menu starts on a prompt rather than a guessed current value
@@ -173,7 +173,7 @@ api('/api/actions').then((a) => {
   }
 }).catch(() => {});
 
-api('/api/settings').then((s) => {
+api('api/settings').then((s) => {
   for (const [name, val] of Object.entries(s.suction_presets)) {
     $('presets').append(h('button', {class: 'ghost small', onclick: async () => { if (await act('set_suction', val)) { setSuction(val); toast('Suction ' + name + ' sent. The robot takes a few minutes to apply it.'); } }}, name + ' ' + val));
   }
@@ -190,12 +190,12 @@ liveStatus((s) => {
 let actionLabels = null;
 async function refresh() {
   try {
-    const sch = await api('/api/schedule');
+    const sch = await api('api/schedule');
     const n = sch.next;
-    actionLabels = actionLabels || await api('/api/actions');
+    actionLabels = actionLabels || await api('api/actions');
     $('sched').textContent = n ? 'Next: ' + ((actionLabels[n.entry.action] || {}).label || n.entry.action) + ' at ' + new Date(n.at).toLocaleString([], {weekday: 'short', hour: '2-digit', minute: '2-digit'})
       : sch.entries.length ? 'No upcoming runs (all disabled)' : 'Nothing scheduled';
-    const rs = await api('/api/responses?limit=40');
+    const rs = await api('api/responses?limit=40');
     const log = $('log');
     log.replaceChildren(...rs.reverse().map((r) => h('div', {}, r.ts.slice(11) + '  ' + r.cmd + (r.data ? ' = ' + r.data : '') + '  (key ' + r.key + ')')));
   } catch (_) {}
