@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+docker/.env
+*.pem
+
+# local-only: decoded vendor app and macOS metadata
+com.trifo.trifohome_*/
+*.apk
+.DS_Store

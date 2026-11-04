@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Drive · lucy-local</title>
+<link rel="stylesheet" href="/static/app.css">
+<style>
+html, body { height: 100%; overflow: hidden; background: #000; touch-action: none; user-select: none; -webkit-user-select: none; overscroll-behavior: none; }
+.glass { background: rgba(18, 20, 34, .62); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,.14); }
+#stage { position: fixed; inset: 0; background: #000; }
+#video { width: 100%; height: 100%; object-fit: contain; display: none; }
+#idle { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 8px; align-items: center; justify-content: center; color: var(--muted); text-align: center; padding: 24px; }
+#idle b { color: var(--text); font-weight: 500; font-size: 15px; }
+#flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+
+#top { position: fixed; top: max(10px, env(safe-area-inset-top)); left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right)); display: flex; gap: 8px; align-items: center; }
+#top .grow { flex: 1; }
+.chip.glass { background: rgba(18, 20, 34, .62); }
+.ib { padding: 7px 11px; border-radius: 12px; }
+.ib.on { background: rgba(62, 207, 142, .28); border-color: var(--ok); }
+
+#readout { position: fixed; left: 50%; top: calc(max(10px, env(safe-area-inset-top)) + 46px); transform: translateX(-50%); padding: 6px 14px; border-radius: 99px; font-weight: 600; opacity: 0; transition: opacity .15s; pointer-events: none; white-space: nowrap; }
+#readout.show { opacity: 1; }
+
+#stick { position: fixed; left: max(22px, env(safe-area-inset-left)); bottom: max(26px, env(safe-area-inset-bottom)); width: 176px; height: 176px; border-radius: 50%; touch-action: none; }
+#stick .ring { position: absolute; inset: 0; border-radius: 50%; }
+#stick svg { position: absolute; inset: 0; pointer-events: none; }
+#knob { position: absolute; width: 72px; height: 72px; border-radius: 50%; pointer-events: none; background: radial-gradient(circle at 35% 30%, #fff, #c9cfdf 55%, #8e95ab); box-shadow: 0 6px 18px rgba(0,0,0,.5); transition: left .12s, top .12s; }
+#stick.active #knob { transition: none; }
+#stick .label { position: absolute; left: 0; right: 0; bottom: -20px; text-align: center; font-size: 11px; color: var(--muted); }
+
+#actions { position: fixed; right: max(18px, env(safe-area-inset-right)); bottom: max(26px, env(safe-area-inset-bottom)); display: grid; grid-template-columns: repeat(2, 76px); gap: 10px; }
+#actions button { height: 64px; flex-direction: column; gap: 2px; font-size: 12px; border-radius: 12px; }
+#actions .i { font-size: 20px; line-height: 1; }
+#stop { grid-column: span 2; height: 72px !important; background: rgba(240, 86, 107, .9) !important; font-weight: 700; font-size: 14px !important; }
+
+#help { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.55); padding: 20px; z-index: 20; }
+#help.show { display: flex; }
+#help .box { max-width: 390px; border-radius: 16px; padding: 18px 20px; background: rgba(18, 20, 34, .92); display: grid; gap: 8px; }
+#help p, #help li { margin: 0; color: #cfd3e1; font-size: 13px; }
+#help ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+kbd { background: rgba(255,255,255,.12); border-radius: 4px; padding: 0 5px; font: 12px ui-monospace, monospace; }
+
+@media (max-aspect-ratio: 4/5) {
+  #stage { bottom: auto; height: 75vw; top: calc(env(safe-area-inset-top) + 54px); }
+}
+@media (max-width: 480px) {
+  #top { gap: 6px; } #top .chip { padding: 4px 8px; } #mode-txt, #fs-btn { display: none !important; } .ib { padding: 6px 9px; }
+}
+@media (max-width: 380px) {
+  #actions { grid-template-columns: repeat(2, 66px); gap: 8px; }
+  #stick { width: 150px; height: 150px; } #knob { width: 64px; height: 64px; }
+}
+</style>
+</head>
+<body>
+<div id="stage">
+  <video id="video" muted playsinline autoplay></video>
+  <div id="idle"><b id="idle-big">Waking the camera…</b><span id="idle-sub">About 5 seconds</span></div>
+  <div id="flash"></div>
+</div>
+
+<div id="top">
+  <span class="chip glass"><span class="dot" id="conn-dot"></span><span id="conn">…</span></span>
+  <span class="chip glass">🔋 <span data-status="battery">--</span></span>
+  <span class="chip glass" title="Manual mode"><span class="dot" id="mode-dot"></span><span id="mode-txt">Auto</span></span>
+  <span class="grow"></span>
+  <button class="ib glass on" id="cam-btn" title="Camera on/off">📷</button>
+  <button class="ib glass" id="snap-btn" title="Snapshot (P)">◉</button>
+  <button class="ib glass" id="talk-btn" title="Talk through the robot's speaker (T)">🎤</button>
+  <button class="ib glass" id="fs-btn" title="Full screen (F)">⛶</button>
+  <button class="ib glass" id="help-btn" title="Help (?)">?</button>
+  <a class="btn ib glass" href="/" title="Dashboard">☰</a>
+</div>
+
+<div id="readout" class="glass"></div>
+
+<div id="stick" aria-label="Drive joystick">
+  <div class="ring glass"></div>
+  <svg viewBox="0 0 176 176" aria-hidden="true"><g fill="none" stroke="rgba(255,255,255,.35)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M80 22 L88 13 L96 22"/><path d="M80 154 L88 163 L96 154"/><path d="M22 80 L13 88 L22 96"/><path d="M154 80 L163 88 L154 96"/></g></svg>
+  <div id="knob"></div>
+  <div class="label">drag to drive</div>
+</div>
+
+<div id="actions">
+  <button class="glass" data-act="start"><span class="i">▶</span>Clean</button>
+  <button class="glass" data-act="pause"><span class="i">⏸</span>Pause</button>
+  <button class="glass" data-act="dock"><span class="i">⌂</span>Dock</button>
+  <button class="glass" data-act="locate"><span class="i">🔔</span>Find</button>
+  <button class="glass" id="stop">■ STOP</button>
+</div>
+
+<div id="help"><div class="box">
+  <h2>Driving</h2>
+  <p>Drag the stick the way you want to go and let go to stop. Manual mode switches on by itself and back off after 2 minutes without driving.</p>
+  <ul>
+    <li>Up: forward. A little off up: gentle turn, further: sharper turn. Sideways: spin. Down: reverse.</li>
+    <li>Keys: <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or arrows. <kbd>W</kbd>+<kbd>A</kbd> curves, <kbd>A</kbd> alone spins, <kbd>Shift</kbd> gentler. <kbd>Space</kbd> stop, <kbd>P</kbd> snapshot, <kbd>T</kbd> talk on/off, <kbd>F</kbd> full screen.</li>
+    <li>Game controller: left stick drives, <b>B</b> stops, <b>Y</b> snapshot.</li>
+  </ul>
+  <p>Without root the robot has 8 fixed moves, so the stick snaps to the nearest. The label at the top shows which. If a move is wrong for your model, remap it in Settings.</p>
+  <div class="row"><span class="grow"></span><button onclick="$('help').classList.remove('show')">Got it</button></div>
+</div></div>
+
+<script src="/static/app.js"></script>
+<script>
+'use strict';
+
+// ---------------------------------------------------------------- camera
+let camWanted = true;
+function idle(big, sub) { $('idle').style.display = 'flex'; $('idle-big').textContent = big; $('idle-sub').textContent = sub || ''; }
+const cam = Camera($('video'), (s, msg) => {
+  $('video').style.display = s === 'live' ? 'block' : 'none';
+  $('cam-btn').classList.toggle('on', s === 'live' || s === 'starting');
+  if (s === 'live') $('idle').style.display = 'none';
+  else if (s === 'starting') idle('Waking the camera…', 'About 5 seconds');
+  else if (s === 'error') idle('Camera unavailable', msg + '. Tap 📷 to retry.');
+  else if (s === 'dropped' && camWanted) { idle('Camera dropped', 'Reconnecting…'); setTimeout(() => cam.start().catch(() => {}), 2000); }
+  else if (s === 'off' && !camWanted) idle('Camera off', 'Tap 📷 to turn it on');
+});
+$('cam-btn').onclick = () => {
+  if (cam.running) { camWanted = false; cam.stop(); }
+  else { camWanted = true; cam.start().catch(() => {}); }
+};
+async function snapshot() {
+  const s = await cam.snapshot();
+  if (!s) return toast('Camera is not running', true);
+  const f = $('flash');
+  f.style.transition = 'none'; f.style.opacity = '.6';
+  requestAnimationFrame(() => { f.style.transition = 'opacity .35s'; f.style.opacity = '0'; });
+  const url = URL.createObjectURL(s.blob);
+  const a = h('a', {href: url, download: 'robot-' + stamp() + '.png'});
+  a.click();
+  toast('Snapshot saved (' + s.width + '×' + s.height + ')');
+}
+$('snap-btn').onclick = snapshot;
+const talk = Talk((st, msg) => {
+  $('talk-btn').classList.toggle('on', st === 'on');
+  $('talk-btn').style.opacity = st === 'starting' ? .6 : '';
+  if (st === 'on') toast('Talking. Tap 🎤 again to stop.');
+  if (st === 'error') toast('Talk failed: ' + msg, true);
+});
+$('talk-btn').onclick = () => talk.toggle();
+$('talk-btn').hidden = true;
+api('/api/actions').then((a) => { $('talk-btn').hidden = !a.talk_start; }).catch(() => {});
+
+liveStatus();
+
+// ---------------------------------------------------------------- server link
+// The server owns manual mode and the dead-man stop; we report the wanted move on
+// every change and every 250 ms while held.
+let ws = null, wsReady = false;
+function connectWs() {
+  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/api/drive/ws');
+  ws.onopen = () => { wsReady = true; };
+  ws.onclose = () => { wsReady = false; setTimeout(connectWs, 1500); };
+  ws.onmessage = (e) => {
+    let m; try { m = JSON.parse(e.data); } catch (_) { return; }
+    if (!m.ok) { toast(m.error || 'drive error', true); return; }
+    $('mode-txt').textContent = m.entering ? 'Entering manual…' : m.manual ? 'Manual' : 'Auto';
+    $('mode-dot').className = 'dot ' + (m.entering ? 'warn' : m.manual ? 'ok' : '');
+  };
+}
+connectWs();
+const tell = (move) => { if (wsReady) ws.send(JSON.stringify({move})); };
+
+// ---------------------------------------------------------------- moves
+const MOVES = {
+  forward: ['↑', 'Forward'], gentle_left: ['↖', 'Gentle left'], gentle_right: ['↗', 'Gentle right'],
+  turn_left: ['↰', 'Turn left'], turn_right: ['↱', 'Turn right'], spin_left: ['⟲', 'Spin left'],
+  spin_right: ['⟳', 'Spin right'], reverse: ['↓', 'Reverse'],
+};
+// x right, y up, -1..1; angle 0 = straight up
+function moveFromVector(x, y, gentle) {
+  if (Math.hypot(x, y) < 0.3) return null;
+  const deg = Math.atan2(x, y) * 180 / Math.PI, a = Math.abs(deg), r = deg > 0;
+  if (a <= 15) return 'forward';
+  if (a <= 40 || (gentle && a <= 65)) return r ? 'gentle_right' : 'gentle_left';
+  if (a <= 65) return r ? 'turn_right' : 'turn_left';
+  if (a <= 125) return r ? 'spin_right' : 'spin_left';
+  return 'reverse';
+}
+
+const inputs = {stick: null, pad: null, keys: null};
+let current = null, beat = null;
+function update() {
+  const next = inputs.stick || inputs.pad || inputs.keys;
+  if (next === current) return;
+  current = next;
+  clearInterval(beat); beat = null;
+  const ro = $('readout');
+  if (next) {
+    ro.textContent = MOVES[next][0] + '  ' + MOVES[next][1];
+    ro.classList.add('show');
+    tell(next);
+    beat = setInterval(() => tell(next), 250);
+  } else {
+    ro.classList.remove('show');
+    tell(null);
+  }
+}
+function stopAll() {
+  inputs.stick = inputs.pad = inputs.keys = null;
+  keys.clear(); resetKnob(); update(); tell(null);
+}
+$('stop').onclick = stopAll;
+
+// ---- touch / mouse stick
+const stick = $('stick'), knob = $('knob');
+let pointer = null;
+function geom() { const r = stick.getBoundingClientRect(); return {cx: r.left + r.width / 2, cy: r.top + r.height / 2, R: r.width / 2 - knob.offsetWidth / 4, size: r.width}; }
+function placeKnob(dx, dy) { const g = geom(); knob.style.left = (g.size / 2 - knob.offsetWidth / 2 + dx) + 'px'; knob.style.top = (g.size / 2 - knob.offsetHeight / 2 + dy) + 'px'; }
+function resetKnob() { stick.classList.remove('active'); placeKnob(0, 0); }
+resetKnob();
+function stickMove(e) {
+  const g = geom();
+  let dx = e.clientX - g.cx, dy = e.clientY - g.cy;
+  const d = Math.hypot(dx, dy);
+  if (d > g.R) { dx *= g.R / d; dy *= g.R / d; }
+  placeKnob(dx, dy);
+  inputs.stick = moveFromVector(dx / g.R, -dy / g.R, e.shiftKey);
+  update();
+}
+stick.addEventListener('pointerdown', (e) => { e.preventDefault(); pointer = e.pointerId; stick.setPointerCapture(e.pointerId); stick.classList.add('active'); stickMove(e); });
+stick.addEventListener('pointermove', (e) => { if (e.pointerId === pointer) stickMove(e); });
+const stickUp = (e) => { if (e.pointerId !== pointer) return; pointer = null; inputs.stick = null; resetKnob(); update(); };
+['pointerup', 'pointercancel', 'lostpointercapture'].forEach((t) => stick.addEventListener(t, stickUp));
+window.addEventListener('resize', () => { if (pointer == null) resetKnob(); });
+
+// ---- keyboard
+const keys = new Set();
+const KEYMAP = {w: 'up', arrowup: 'up', s: 'down', arrowdown: 'down', a: 'left', arrowleft: 'left', d: 'right', arrowright: 'right'};
+function keysToMove(shift) {
+  const x = (keys.has('right') ? 1 : 0) - (keys.has('left') ? 1 : 0), y = (keys.has('up') ? 1 : 0) - (keys.has('down') ? 1 : 0);
+  if (!x && !y) return null;
+  if (y < 0) return 'reverse';
+  if (y > 0 && x) return shift ? (x > 0 ? 'gentle_right' : 'gentle_left') : (x > 0 ? 'turn_right' : 'turn_left');
+  if (y > 0) return 'forward';
+  return x > 0 ? 'spin_right' : 'spin_left';
+}
+document.addEventListener('keydown', (e) => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const k = e.key.toLowerCase();
+  if (k === ' ') { e.preventDefault(); stopAll(); return; }
+  if (!e.repeat && k === 'p') return snapshot();
+  if (!e.repeat && k === 't') return talk.toggle();
+  if (!e.repeat && k === 'f') return toggleFs();
+  if (!e.repeat && k === '?') return $('help').classList.toggle('show');
+  if (k === 'escape') return $('help').classList.remove('show');
+  const dir = KEYMAP[k];
+  if (!dir) return;
+  e.preventDefault();
+  keys.add(dir); inputs.keys = keysToMove(e.shiftKey); update();
+});
+document.addEventListener('keyup', (e) => {
+  const dir = KEYMAP[e.key.toLowerCase()];
+  if (dir) keys.delete(dir);
+  inputs.keys = keysToMove(e.shiftKey); update();
+});
+
+// ---- game controller
+let padPrev = [];
+(function pollPad() {
+  const pad = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).find((p) => p && p.connected);
+  if (pad) {
+    const m = moveFromVector(pad.axes[0] || 0, -(pad.axes[1] || 0), false);
+    if (m !== inputs.pad) { inputs.pad = m; update(); }
+    const b = pad.buttons.map((x) => x.pressed);
+    if (b[1] && !padPrev[1]) stopAll();
+    if (b[3] && !padPrev[3]) snapshot();
+    padPrev = b;
+  } else if (inputs.pad) { inputs.pad = null; update(); }
+  requestAnimationFrame(pollPad);
+})();
+window.addEventListener('gamepadconnected', () => toast('Controller connected: left stick drives'));
+
+// letting go of the page = letting go of the stick
+window.addEventListener('blur', () => { keys.clear(); inputs.keys = inputs.stick = null; resetKnob(); update(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) stopAll();
+  else if (camWanted && !cam.running) cam.start().catch(() => {});
+});
+
+// ---- actions
+document.querySelectorAll('#actions [data-act]').forEach((b) => {
+  b.onclick = async () => { stopAll(); if (await act(b.dataset.act)) toast(b.textContent.trim().slice(1).trim() + ' sent'); };
+});
+
+// ---- misc
+function toggleFs() { document.fullscreenElement ? document.exitFullscreen().catch(() => {}) : document.documentElement.requestFullscreen().catch(() => {}); }
+$('fs-btn').onclick = toggleFs;
+if (!document.documentElement.requestFullscreen) $('fs-btn').style.display = 'none';
+$('help-btn').onclick = () => $('help').classList.toggle('show');
+try { if (!localStorage.getItem('llDriveHelp')) { $('help').classList.add('show'); localStorage.setItem('llDriveHelp', '1'); } } catch (_) {}
+
+cam.start().catch(() => {});
+</script>
+</body>
+</html>

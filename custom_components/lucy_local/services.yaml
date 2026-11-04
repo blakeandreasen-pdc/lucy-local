@@ -1,0 +1,14 @@
+go_to:
+  target:
+    entity:
+      integration: lucy_local
+      domain: vacuum
+  fields:
+    x:
+      required: true
+      selector:
+        number: {min: -30, max: 30, step: 0.1, unit_of_measurement: m, mode: box}
+    y:
+      required: true
+      selector:
+        number: {min: -30, max: 30, step: 0.1, unit_of_measurement: m, mode: box}

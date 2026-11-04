@@ -1,0 +1,43 @@
+name: Lucy Local
+version: "0.1.0"
+slug: lucy_local
+description: Local cloud for Trifo robot vacuums (Max, Lucy), with camera, map and control panel
+url: https://github.com/blakeandreasen-pdc/lucy-local
+arch:
+  - amd64
+  - aarch64
+# prebuilt by .github/workflows/addon.yml
+image: ghcr.io/blakeandreasen-pdc/lucy-local-addon-{arch}
+startup: services
+boot: auto
+init: false
+webui: "http://[HOST]:[PORT:8080]"
+watchdog: "http://[HOST]:[PORT:8080]/health"
+ports:
+  443/tcp: 443
+  7990/tcp: 7990
+  17766/tcp: 17766
+  1935/tcp: 1935
+  8080/tcp: 8110
+  8889/tcp: 8889
+  8189/udp: 8189
+  8554/tcp: 8554
+  8888/tcp: null
+ports_description:
+  443/tcp: "Robot: voice-package/OTA checks (optional; leave empty if 443 is taken)"
+  7990/tcp: "Robot: QLCloud dispatch (TLS)"
+  17766/tcp: "Robot: MQTT (TLS)"
+  1935/tcp: "Robot: camera stream in (RTMP)"
+  8080/tcp: "Web UI and API"
+  8889/tcp: "Camera in the browser (WebRTC signalling)"
+  8189/udp: "Camera in the browser (WebRTC media)"
+  8554/tcp: "Camera over RTSP (Home Assistant integration)"
+  8888/tcp: "Camera over HLS (optional)"
+options:
+  server_ip: ""
+  log_level: info
+  capture: false
+schema:
+  server_ip: str
+  log_level: list(debug|info|warning|error)
+  capture: bool

@@ -1,0 +1,62 @@
+# lucy-local + MediaMTX for the camera.
+# Setup: cp .env.example .env, set SERVER_IP, then `docker compose up -d --build`.
+name: lucy-local
+
+services:
+  lucy-local:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: lucy-local:latest
+    container_name: lucy-local
+    restart: unless-stopped
+    init: true
+    ports:
+      - "443:443"               # robot: voice packages / OTA checks
+      - "7990:7990"             # robot: QLCloud dispatch (TLS)
+      - "17766:17766"           # robot: MQTT (TLS)
+      - "${WEB_PORT:-8110}:8080"  # web UI + API
+    environment:
+      SERVER_IP: ${SERVER_IP:?set SERVER_IP in .env}
+      TZ: ${TZ:-UTC}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      CAPTURE: ${CAPTURE:-}           # 1 = log raw robot frames to /data/capture.jsonl
+      HA_MQTT_PASSWORD: ${HA_MQTT_PASSWORD:-}
+    volumes:
+      - data:/data
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    tmpfs: [/tmp]
+
+  # Receives the robot's RTMP push (it streams to *.lightfieldcamera.com.cn, which DNS
+  # points here) and serves it to browsers over WebRTC.
+  mediamtx:
+    image: bluenviron/mediamtx:1.9.3-ffmpeg
+    container_name: lucy-mediamtx
+    restart: unless-stopped
+    ports:
+      - "1935:1935"       # RTMP from the robot
+      - "8889:8889"       # WebRTC signalling (WHEP)
+      - "8888:8888"       # HLS  http://<host>:8888/lucy
+      - "8554:8554"       # RTSP rtsp://<host>:8554/lucy (Home Assistant's camera)
+      - "8189:8189/udp"   # WebRTC media
+    environment:
+      MTX_LOGLEVEL: info
+      MTX_WEBRTCADDITIONALHOSTS: ${SERVER_IP:?set SERVER_IP in .env}
+      MTX_API: "yes"
+      MTX_APIADDRESS: 127.0.0.1:9997
+      MTX_PATHS_LUCY_RUNONDEMAND: /robot-cam.sh
+      MTX_PATHS_LUCY_RUNONDEMANDSTARTTIMEOUT: 40s
+      MTX_PATHS_LUCY_RUNONDEMANDCLOSEAFTER: 10s
+      # browser mic (WHIP, via lucy-local /api/talk/whip) -> AAC RTMP the robot plays
+      MTX_PATHS_TALK_RUNONREADY: /talk-relay.sh
+      MTX_PATHS_TALK_RUNONREADYRESTART: "yes"
+    volumes:
+      - ./mediamtx/robot-cam.sh:/robot-cam.sh:ro
+      - ./mediamtx/talk-relay.sh:/talk-relay.sh:ro
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+
+volumes:
+  data:

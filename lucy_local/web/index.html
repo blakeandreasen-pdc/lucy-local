@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>lucy-local</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<main class="page">
+  <div class="grid2">
+    <div style="display:grid;gap:16px">
+    <section class="card">
+      <div class="card-head">
+        <h2>Camera</h2><span class="grow"></span>
+        <button id="cam-btn">Start</button>
+        <button id="snap-btn" title="Snapshot">Snapshot</button>
+        <button id="talk-btn" title="Talk through the robot's speaker">🎤 Talk</button>
+        <a class="btn" href="/drive">Drive ›</a>
+      </div>
+      <div class="video">
+        <video id="video" muted playsinline autoplay></video>
+        <div class="idle" id="cam-idle"><div>Camera off</div><div class="small">Starts in about 5 s. Stops a minute after you leave.</div></div>
+      </div>
+      <div class="snap" id="snap" hidden>
+        <img id="snap-img" alt="Snapshot">
+        <div class="row small" style="margin-top:6px"><span class="grow muted" id="snap-info"></span><a id="snap-save" download>Save</a></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>Map</h2><span class="grow"></span><span class="small muted" id="map-info">--</span></div>
+      <div class="mapbox"><canvas id="map"></canvas></div>
+      <div class="row small" id="goto-bar" style="margin-top:8px" hidden>
+        <span class="grow" id="goto-info"></span>
+        <button class="ghost" id="goto-cancel">Cancel</button><button class="primary" id="goto-go">Go here</button>
+      </div>
+      <div class="small muted" id="goto-hint" style="margin-top:6px" hidden>Tap the map to send the robot to a spot (no cleaning).</div>
+    </section>
+    </div>
+
+    <div style="display:grid;gap:16px">
+      <section class="card">
+        <div class="card-head"><h2>Robot</h2><span class="grow"></span><span class="chip" id="state-chip">--</span></div>
+        <div class="actions-grid">
+          <button onclick="act('start')"><span class="i">▶</span>Clean</button>
+          <button onclick="act('pause')"><span class="i">⏸</span>Pause</button>
+          <button onclick="act('dock')"><span class="i">⌂</span>Dock</button>
+          <button onclick="act('locate')"><span class="i">🔔</span>Find</button>
+          <button class="danger" onclick="act('stop')"><span class="i">■</span>Stop</button>
+        </div>
+        <table class="small">
+          <tr><th>Battery</th><td data-status="battery">--</td><th>Firmware</th><td data-status="firmware">--</td></tr>
+          <tr><th>Suction</th><td data-status="suction">--</td><th>IP</th><td data-status="ip">--</td></tr>
+          <tr><th>Volume</th><td data-status="volume">--</td><th>Updated</th><td data-status="updated">--</td></tr>
+        </table>
+      </section>
+
+      <section class="card">
+        <h2>Settings</h2>
+        <div class="slider"><span>Suction</span><input type="range" id="suction" min="0" max="100" step="1"><output id="suction-out">--</output></div>
+        <div class="row" id="presets"></div>
+        <div class="slider"><span>Volume</span><input type="range" id="volume" min="0" max="100" step="1"><output id="volume-out">--</output></div>
+        <div class="row" id="lang-row" hidden><span>Voice language</span><select id="lang" aria-label="Voice language"></select></div>
+        <div class="row"><button id="mute-btn">Mute / unmute</button><button id="unmute-btn" hidden>Voice on</button><span class="muted small" id="mute-state"></span></div>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h2>Schedule</h2><span class="grow"></span><a href="/settings#schedule" class="small">Edit ›</a></div>
+        <div id="sched" class="small muted">--</div>
+      </section>
+    </div>
+  </div>
+
+  <section class="card">
+    <div class="card-head"><h2>Robot replies</h2><span class="grow"></span><span class="small muted">Latest command replies from the robot</span></div>
+    <div class="log" id="log"></div>
+  </section>
+</main>
+<script src="/static/app.js"></script>
+<script>
+'use strict';
+topbar('home');
+
+// ---- camera
+const cam = Camera($('video'), (s, msg) => {
+  const idle = $('cam-idle');
+  $('video').style.display = s === 'live' ? 'block' : 'none';
+  idle.style.display = s === 'live' ? 'none' : 'flex';
+  idle.firstElementChild.textContent = {starting: 'Waking the camera…', off: 'Camera off', dropped: 'Camera dropped',
+                                        error: 'Camera unavailable'}[s] || '';
+  idle.lastElementChild.textContent = s === 'error' ? msg : s === 'starting' ? 'About 5 seconds' : '';
+  $('cam-btn').textContent = s === 'live' || s === 'starting' ? 'Stop' : 'Start';
+});
+$('cam-btn').onclick = () => cam.running ? cam.stop() : cam.start().catch(() => {});
+$('snap-btn').onclick = async () => {
+  const wasRunning = cam.running;
+  try {
+    await cam.start();
+    if (!wasRunning) await new Promise((r) => setTimeout(r, 1500));
+    const s = await cam.snapshot();
+    if (!s) return toast('Camera is not running', true);
+    const url = URL.createObjectURL(s.blob);
+    $('snap-img').src = url;
+    $('snap-save').href = url;
+    $('snap-save').download = 'robot-' + stamp() + '.png';
+    $('snap-info').textContent = s.width + '×' + s.height + ' at ' + new Date().toLocaleTimeString();
+    $('snap').hidden = false;
+  } catch (e) { toast('Snapshot failed: ' + e.message, true); }
+  finally { if (!wasRunning) cam.stop(); }
+};
+
+// ---- talk through the robot's speaker
+const talk = Talk((s, msg) => {
+  const b = $('talk-btn');
+  b.classList.toggle('on', s === 'on');
+  b.textContent = s === 'on' ? '🎤 Talking… stop' : s === 'starting' ? '🎤 Connecting…' : '🎤 Talk';
+  if (s === 'on') toast('Talking. The robot plays you about a second behind.');
+  if (s === 'error') toast('Talk failed: ' + msg, true);
+});
+$('talk-btn').onclick = () => talk.toggle();
+$('talk-btn').hidden = true;
+api('/api/actions').then((a) => { $('talk-btn').hidden = !a.talk_start; }).catch(() => {});
+
+// ---- map: refreshes while this page is open
+let gotoTarget = null, canGoto = false;
+const mapView = MapView($('map'), (t) => { $('map-info').textContent = t; }, {onPick: (x, y) => {
+  if (!canGoto) return;
+  gotoTarget = {x, y};
+  mapView.mark(gotoTarget);
+  $('goto-info').textContent = 'Send the robot to ' + Math.hypot(x, y).toFixed(1) + ' m from the dock (x ' + x + ', y ' + y + ')?';
+  $('goto-bar').hidden = false;
+}});
+mapView.start();
+api('/api/actions').then((a) => { canGoto = !!a.goto; $('goto-hint').hidden = !canGoto; }).catch(() => {});
+$('goto-cancel').onclick = () => { gotoTarget = null; mapView.mark(null); $('goto-bar').hidden = true; };
+$('goto-go').onclick = async () => {
+  if (!gotoTarget) return;
+  $('goto-go').disabled = true;
+  try {
+    await api('/api/goto', {body: gotoTarget});
+    $('goto-info').textContent = 'Sent. The robot takes up to a minute to start moving.';
+    setTimeout(() => { $('goto-bar').hidden = true; }, 4000);
+  } catch (e) { $('goto-info').textContent = 'Failed: ' + e.message; }
+  $('goto-go').disabled = false;
+};
+
+// ---- sliders: send on release, not while dragging
+function slider(id, action) {
+  const input = $(id), out = $(id + '-out');
+  let dragging = false;
+  input.addEventListener('input', () => { dragging = true; out.textContent = input.value + '%'; });
+  input.addEventListener('change', async () => { dragging = false; if (await act(action, +input.value)) toast(action === 'set_suction' ? 'Suction ' + input.value + '% sent. The robot takes a few minutes to apply it.' : 'Volume ' + input.value + '%'); });
+  return (v) => { if (!dragging && v != null) { input.value = v; out.textContent = v + '%'; } };
+}
+const setSuction = slider('suction', 'set_suction');
+const setVolume = slider('volume', 'set_volume');
+$('mute-btn').onclick = () => act('mute');
+$('unmute-btn').onclick = () => act('unmute');
+api('/api/actions').then((a) => {
+  // profiles with a separate unmute (the Max's VOICE 0/1) get two buttons instead of a toggle
+  if (a.unmute) { $('mute-btn').textContent = a.mute.label; $('unmute-btn').textContent = a.unmute.label; $('unmute-btn').hidden = false; }
+  // the robot only confirms "OK", so the menu starts on a prompt rather than a guessed current value
+  const lang = a.set_language && a.set_language.choices;
+  if (lang) {
+    $('lang').replaceChildren(h('option', {value: '', disabled: true, selected: true}, 'Choose…'),
+      ...Object.entries(lang).map(([v, label]) => h('option', {value: v}, label)));
+    $('lang').onchange = async () => {
+      const v = $('lang').value;
+      if (v && await act('set_language', v)) toast('Voice language ' + lang[v] + ' sent. The robot replies in a minute or two.');
+    };
+    $('lang-row').hidden = false;
+  }
+}).catch(() => {});
+
+api('/api/settings').then((s) => {
+  for (const [name, val] of Object.entries(s.suction_presets)) {
+    $('presets').append(h('button', {class: 'ghost small', onclick: async () => { if (await act('set_suction', val)) { setSuction(val); toast('Suction ' + name + ' sent. The robot takes a few minutes to apply it.'); } }}, name + ' ' + val));
+  }
+});
+
+liveStatus((s) => {
+  $('state-chip').textContent = s.online ? s.name : 'offline';
+  setSuction(s.suction);
+  setVolume(s.volume);
+  $('mute-state').textContent = s.muted == null ? '' : s.muted ? 'muted' : 'sound on';
+});
+
+// ---- schedule summary + replies log
+let actionLabels = null;
+async function refresh() {
+  try {
+    const sch = await api('/api/schedule');
+    const n = sch.next;
+    actionLabels = actionLabels || await api('/api/actions');
+    $('sched').textContent = n ? 'Next: ' + ((actionLabels[n.entry.action] || {}).label || n.entry.action) + ' at ' + new Date(n.at).toLocaleString([], {weekday: 'short', hour: '2-digit', minute: '2-digit'})
+      : sch.entries.length ? 'No upcoming runs (all disabled)' : 'Nothing scheduled';
+    const rs = await api('/api/responses?limit=40');
+    const log = $('log');
+    log.replaceChildren(...rs.reverse().map((r) => h('div', {}, r.ts.slice(11) + '  ' + r.cmd + (r.data ? ' = ' + r.data : '') + '  (key ' + r.key + ')')));
+  } catch (_) {}
+}
+refresh();
+setInterval(refresh, 5000);
+</script>
+</body>
+</html>

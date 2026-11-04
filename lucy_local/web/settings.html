@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Settings · lucy-local</title>
+<link rel="stylesheet" href="/static/app.css">
+<style>
+.cmd-row { display: grid; grid-template-columns: 70px minmax(0, 1fr) minmax(0, 1fr) 58px auto auto; gap: 6px; align-items: center; }
+.cmd-row.dp { grid-template-columns: 70px 58px minmax(0, 2fr) auto auto; }
+.action { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.action:last-child { border-bottom: 0; }
+.action .name { display: grid; gap: 2px; }
+.action .name code { color: var(--muted); font-size: 11px; }
+.cmds { display: grid; gap: 6px; }
+.group-title { margin-top: 6px; }
+.status-row { display: grid; grid-template-columns: 90px minmax(0, 1fr) auto; gap: 6px; }
+.days { display: flex; gap: 4px; flex-wrap: wrap; }
+.days label { display: inline-flex; gap: 3px; align-items: center; font-size: 12px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; }
+.form-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+.note { font-size: 12px; color: var(--muted); }
+.banner { padding: 10px 12px; border-radius: 10px; background: rgba(79, 140, 255, .1); border: 1px solid rgba(79, 140, 255, .35); font-size: 13px; }
+@media (max-width: 720px) {
+  .action { grid-template-columns: minmax(0, 1fr); }
+  .cmd-row, .cmd-row.dp { grid-template-columns: 1fr 1fr; }
+}
+</style>
+</head>
+<body>
+<main class="page">
+  <section class="card" id="profile">
+    <div class="card-head">
+      <h2>Robot profile</h2><span class="grow"></span>
+      <select id="prof-select" aria-label="Profile"></select>
+      <button id="prof-use" class="primary">Use this profile</button>
+    </div>
+    <p class="note">A profile says which command each control sends. Models differ: on a Trifo Max, reverse is <code>ANGLE:10</code>; on a Lucy it is <code>ANGLE:8</code>. Use <code>{value}</code> where a number goes (volume, suction). <b>Test</b> sends one command right away and shows the robot's reply.</p>
+    <div id="prof-banner" class="banner" hidden></div>
+    <div id="prof-body"></div>
+    <div>
+      <h3 class="group-title">Status names</h3>
+      <p class="note">The robot reports a number. Name it here (the dashboard shows "state N" for unknown codes).</p>
+      <div id="status-names" style="display:grid;gap:6px"></div>
+      <div class="row" style="margin-top:6px"><button id="add-status" class="ghost">+ Add code</button></div>
+    </div>
+    <div class="row">
+      <button id="prof-copy">Duplicate…</button>
+      <button id="prof-delete" class="ghost">Delete</button>
+      <span class="grow"></span>
+      <span class="note" id="dirty"></span>
+      <button id="prof-save" class="primary">Save profile</button>
+    </div>
+    <div>
+      <h3 class="group-title">Last robot replies</h3>
+      <div class="log" id="replies"></div>
+    </div>
+  </section>
+
+  <section class="card" id="schedule">
+    <h2>Schedule</h2>
+    <table><thead><tr><th>Time</th><th>Days</th><th>Action</th><th>Value</th><th>On</th><th></th></tr></thead><tbody id="sched-body"></tbody></table>
+    <h3 class="group-title">Add</h3>
+    <div class="form-grid">
+      <label class="field">Time<input type="time" id="s-time" value="09:00"></label>
+      <label class="field">Action<select id="s-action"></select></label>
+      <label class="field">Value (volume/suction actions)<input type="number" id="s-value" min="0" max="100"></label>
+      <label class="field">Suction before cleaning (optional)<input type="number" id="s-suction" min="0" max="100"></label>
+    </div>
+    <div class="days" id="s-days"></div>
+    <div class="row"><span class="grow"></span><button class="primary" id="s-add">Add schedule</button></div>
+    <p class="note">Times use the server's time zone (TZ in .env).</p>
+  </section>
+
+  <section class="card" id="ha">
+    <div class="card-head"><h2>Home Assistant</h2><span class="grow"></span><span class="chip"><span class="dot" id="ha-dot"></span><span id="ha-state">--</span></span></div>
+    <p class="note">Publishes the robot to your MQTT broker with discovery, so it appears as a vacuum (start, pause, stop, dock, locate, fan speed) plus a battery sensor. Fan speeds use the suction presets below.</p>
+    <div class="form-grid">
+      <label class="field">Enabled<select id="ha-enabled"><option value="false">Off</option><option value="true">On</option></select></label>
+      <label class="field">Broker host<input id="ha-host" placeholder="homeassistant.local"></label>
+      <label class="field">Port<input type="number" id="ha-port" value="1883"></label>
+      <label class="field">Username<input id="ha-user" autocomplete="off"></label>
+      <label class="field">Password<input type="password" id="ha-pass" autocomplete="new-password"></label>
+      <label class="field">Discovery prefix<input id="ha-prefix" value="homeassistant"></label>
+      <label class="field">Device name<input id="ha-name" value="Trifo"></label>
+    </div>
+    <h3 class="group-title">Suction presets</h3>
+    <div class="form-grid" id="presets"></div>
+    <div class="row"><span class="note grow">The password is kept in the data volume (owner-only file), or set HA_MQTT_PASSWORD in .env instead.</span><button class="primary" id="ha-save">Save</button></div>
+  </section>
+</main>
+<script src="/static/app.js"></script>
+<script>
+'use strict';
+topbar('settings');
+liveStatus();
+
+const GROUPS = {basic: 'Basic', settings: 'Settings', drive: 'Driving', manual: 'Manual mode', camera: 'Camera', status: 'Status'};
+let store = null, editing = null, dirty = false;
+
+function markDirty(v = true) { dirty = v; $('dirty').textContent = v ? 'Unsaved changes' : ''; }
+
+async function loadProfiles(selectId) {
+  store = await api('/api/profiles');
+  const sel = $('prof-select');
+  sel.replaceChildren(...Object.values(store.profiles).map((p) =>
+    h('option', {value: p.id}, p.name + (p.builtin ? ' (built-in)' : '') + (p.id === store.active ? ' ✓ active' : ''))));
+  sel.value = selectId || store.active;
+  edit(sel.value);
+  fillScheduleActions();
+}
+
+function edit(id) {
+  if (dirty && !confirm('Discard unsaved changes?')) { $('prof-select').value = editing.id; return; }
+  editing = structuredClone(store.profiles[id]);
+  markDirty(false);
+  const ro = editing.builtin;
+  $('prof-banner').hidden = !ro;
+  $('prof-banner').textContent = 'Built-in profiles are read-only so updates can fix them. Duplicate this one to change a mapping.';
+  $('prof-use').disabled = id === store.active;
+  $('prof-save').disabled = ro;
+  $('prof-delete').disabled = ro;
+  renderActions(ro);
+  renderStatusNames(ro);
+}
+$('prof-select').onchange = (e) => edit(e.target.value);
+
+function renderActions(ro) {
+  const body = $('prof-body');
+  body.replaceChildren();
+  for (const [g, title] of Object.entries(GROUPS)) {
+    const names = Object.keys(editing.actions).filter((n) => editing.actions[n].group === g);
+    if (!names.length) continue;
+    body.append(h('h3', {class: 'group-title'}, title));
+    for (const n of names) body.append(renderAction(n, editing.actions[n], ro));
+  }
+}
+
+function renderAction(name, a, ro) {
+  const cmds = h('div', {class: 'cmds'});
+  const redraw = () => cmds.replaceChildren(...a.commands.map((c, i) => cmdRow(a, c, i, ro, redraw)),
+    ro ? '' : h('div', {}, h('button', {class: 'ghost small', onclick: () => { a.commands.push({type: 'rx', cmd: '', data: '', key: '2', dp: 2, value: ''}); markDirty(); redraw(); }}, '+ command')));
+  redraw();
+  return h('div', {class: 'action'},
+    h('div', {class: 'name'},
+      ro ? h('b', {}, a.label) : h('input', {value: a.label, 'aria-label': 'Label', oninput: (e) => { a.label = e.target.value; markDirty(); }}),
+      h('code', {}, name + (a.choices ? ' · ' + Object.keys(a.choices).join('/') : a.takes_value ? ' · value ' + a.min + '–' + a.max : ''))),
+    cmds);
+}
+
+function cmdRow(a, c, i, ro, redraw) {
+  const inp = (key, ph, w) => h('input', {value: c[key] ?? '', placeholder: ph, disabled: ro, 'aria-label': ph,
+    style: w ? 'width:' + w : null, oninput: (e) => { c[key] = key === 'dp' ? +e.target.value : e.target.value; markDirty(); }});
+  const type = h('select', {disabled: ro, 'aria-label': 'Type', onchange: (e) => { c.type = e.target.value; markDirty(); redraw(); }},
+    h('option', {value: 'rx'}, 'rx'), h('option', {value: 'dp'}, 'dp'));
+  type.value = c.type;
+  const test = h('button', {class: 'small', onclick: () => testCmd(c)}, 'Test');
+  const del = ro ? '' : h('button', {class: 'ghost small', title: 'Remove', onclick: () => { a.commands.splice(i, 1); markDirty(); redraw(); }}, '✕');
+  return c.type === 'dp'
+    ? h('div', {class: 'cmd-row dp'}, type, inp('dp', 'dp id'), inp('value', 'value, e.g. start'), test, del)
+    : h('div', {class: 'cmd-row'}, type, inp('cmd', 'cmd, e.g. MANCTRL'), inp('data', 'data, e.g. ANGLE:4'), inp('key', 'key'), test, del);
+}
+
+async function testCmd(c) {
+  let cmd = structuredClone(c);
+  const needs = (cmd.value || '').includes('{value}') || (cmd.data || '').includes('{value}');
+  if (needs) {
+    const v = prompt('Value to test with', '50');
+    if (v === null) return;
+    cmd.value = (cmd.value || '').replaceAll('{value}', v);
+    cmd.data = (cmd.data || '').replaceAll('{value}', v);
+  }
+  if (cmd.type === 'rx' && /^MANCTRL$/i.test(cmd.cmd) && /^ANGLE:[1-9]/.test(cmd.data) &&
+      !confirm('This makes the robot move for about 2 seconds. It needs manual mode first (test "Enter manual mode"). Send?')) return;
+  try {
+    const r = await api('/api/send', {body: cmd});
+    toast('Sent');
+    showReplies(r.responses);
+  } catch (e) { toast(e.message, true); }
+}
+
+function showReplies(rs) {
+  $('replies').replaceChildren(...(rs || []).slice().reverse().map((r) =>
+    h('div', {}, r.ts.slice(11) + '  ' + r.cmd + (r.data ? ' = ' + r.data : '') + '  (key ' + r.key + ')')));
+}
+api('/api/responses?limit=8').then(showReplies).catch(() => {});
+
+function renderStatusNames(ro) {
+  const box = $('status-names');
+  const rows = Object.entries(editing.status_names).sort((a, b) => +a[0] - +b[0]);
+  box.replaceChildren(...rows.map(([code, name]) => {
+    const codeIn = h('input', {value: code, disabled: ro, 'aria-label': 'Code'});
+    const nameIn = h('input', {value: name, disabled: ro, 'aria-label': 'Name'});
+    const sync = () => { collectStatus(); markDirty(); };
+    codeIn.oninput = sync; nameIn.oninput = sync;
+    return h('div', {class: 'status-row', 'data-row': ''}, codeIn, nameIn,
+      ro ? h('span') : h('button', {class: 'ghost small', onclick: (e) => { e.target.closest('[data-row]').remove(); collectStatus(); markDirty(); }}, '✕'));
+  }));
+  $('add-status').disabled = ro;
+}
+function collectStatus() {
+  const out = {};
+  document.querySelectorAll('#status-names [data-row]').forEach((r) => {
+    const [c, n] = r.querySelectorAll('input');
+    if (c.value.trim()) out[c.value.trim()] = n.value.trim();
+  });
+  editing.status_names = out;
+}
+$('add-status').onclick = () => { editing.status_names[''] = ''; renderStatusNames(false); };
+
+$('prof-use').onclick = async () => {
+  try { await api('/api/profiles/active', {body: {id: editing.id}}); toast('Now using ' + editing.name); await loadProfiles(editing.id); }
+  catch (e) { toast(e.message, true); }
+};
+$('prof-copy').onclick = async () => {
+  const name = prompt('Name for the copy', editing.name + ' (custom)');
+  if (!name) return;
+  const id = name.toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32) || 'custom';
+  if (store.profiles[id]) return toast('A profile with id "' + id + '" exists already', true);
+  collectStatus();
+  const copy = {...structuredClone(editing), id, name, builtin: false};
+  try { await api('/api/profiles/' + id, {method: 'PUT', body: copy}); markDirty(false); toast('Saved copy. Choose "Use this profile" to switch to it.'); await loadProfiles(id); }
+  catch (e) { toast(e.message, true); }
+};
+$('prof-save').onclick = async () => {
+  collectStatus();
+  try { await api('/api/profiles/' + editing.id, {method: 'PUT', body: editing}); markDirty(false); toast('Profile saved'); await loadProfiles(editing.id); }
+  catch (e) { toast(e.message, true); }
+};
+$('prof-delete').onclick = async () => {
+  if (!confirm('Delete profile "' + editing.name + '"?')) return;
+  try { await api('/api/profiles/' + editing.id, {method: 'DELETE'}); markDirty(false); toast('Deleted'); await loadProfiles(); }
+  catch (e) { toast(e.message, true); }
+};
+window.addEventListener('beforeunload', (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+
+// ---------------------------------------------------------------- schedule
+const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+$('s-days').replaceChildren(...DAYS.map((d, i) => h('label', {}, h('input', {type: 'checkbox', value: i, checked: true}), d)));
+
+function fillScheduleActions() {
+  const active = store.profiles[store.active];
+  $('s-action').replaceChildren(...Object.entries(active.actions)
+    .filter(([, a]) => (a.group === 'basic' || a.group === 'settings') && !a.choices)
+    .map(([n, a]) => h('option', {value: n}, a.label)));
+}
+
+async function loadSchedule() {
+  const s = await api('/api/schedule');
+  const labels = store ? store.profiles[store.active].actions : {};
+  $('sched-body').replaceChildren(...(s.entries.length ? s.entries.map((e) => h('tr', {},
+    h('td', {}, e.time),
+    h('td', {}, e.days.length === 7 ? 'Every day' : e.days.map((d) => DAYS[d]).join(' ')),
+    h('td', {}, (labels[e.action] || {}).label || e.action),
+    h('td', {}, e.value ?? (e.suction != null ? 'suction ' + e.suction : '')),
+    h('td', {}, h('input', {type: 'checkbox', checked: e.enabled, 'aria-label': 'Enabled', onchange: async (ev) => {
+      try { await api('/api/schedule', {body: {...e, enabled: ev.target.checked}}); toast('Updated'); } catch (x) { toast(x.message, true); }
+    }})),
+    h('td', {}, h('button', {class: 'ghost small', onclick: async () => { await api('/api/schedule/' + e.id, {method: 'DELETE'}); loadSchedule(); }}, 'Delete'))))
+    : [h('tr', {}, h('td', {colspan: 6, class: 'muted'}, 'Nothing scheduled yet.'))]));
+}
+$('s-add').onclick = async () => {
+  const days = [...document.querySelectorAll('#s-days input:checked')].map((x) => +x.value);
+  const num = (id) => $(id).value === '' ? null : +$(id).value;
+  try {
+    await api('/api/schedule', {body: {time: $('s-time').value, days, action: $('s-action').value, value: num('s-value'), suction: num('s-suction')}});
+    toast('Schedule added'); loadSchedule();
+  } catch (e) { toast(e.message, true); }
+};
+
+// ---------------------------------------------------------------- Home Assistant + presets
+let settings = null;
+async function loadSettings() {
+  settings = await api('/api/settings');
+  const ha = settings.homeassistant;
+  $('ha-enabled').value = String(ha.enabled); $('ha-host').value = ha.host; $('ha-port').value = ha.port;
+  $('ha-user').value = ha.username; $('ha-pass').value = ha.password; $('ha-prefix').value = ha.discovery_prefix; $('ha-name').value = ha.name;
+  $('presets').replaceChildren(...Object.entries(settings.suction_presets).map(([k, v]) =>
+    h('label', {class: 'field'}, k, h('input', {type: 'number', min: 0, max: 100, value: v, 'data-preset': k}))));
+}
+$('ha-save').onclick = async () => {
+  const presets = {};
+  document.querySelectorAll('[data-preset]').forEach((i) => { presets[i.dataset.preset] = +i.value; });
+  const body = {homeassistant: {enabled: $('ha-enabled').value === 'true', host: $('ha-host').value.trim(), port: +$('ha-port').value,
+    username: $('ha-user').value, password: $('ha-pass').value, discovery_prefix: $('ha-prefix').value.trim() || 'homeassistant',
+    name: $('ha-name').value.trim() || 'Trifo'}, suction_presets: presets};
+  try { await api('/api/settings', {method: 'PUT', body}); toast('Saved'); setTimeout(haStatus, 2500); loadSettings(); }
+  catch (e) { toast(e.message, true); }
+};
+async function haStatus() {
+  try {
+    const s = await api('/api/status');
+    const ha = s.homeassistant;
+    const on = settings && settings.homeassistant.enabled;
+    $('ha-dot').className = 'dot ' + (!on ? '' : ha.connected ? 'ok' : 'bad');
+    $('ha-state').textContent = !on ? 'off' : ha.connected ? 'connected' : (ha.error || 'connecting…');
+  } catch (_) {}
+}
+
+(async () => {
+  await loadProfiles();
+  await Promise.all([loadSchedule(), loadSettings()]);
+  haStatus(); setInterval(haStatus, 10000);
+  if (location.hash) document.querySelector(location.hash)?.scrollIntoView();
+})();
+</script>
+</body>
+</html>

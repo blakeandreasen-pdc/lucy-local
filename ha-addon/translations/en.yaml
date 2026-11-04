@@ -1,0 +1,11 @@
+configuration:
+  server_ip:
+    name: Server IP
+    description: >-
+      This Home Assistant host's LAN address. The robot is sent here, and your DNS must point
+      *.trifo.com and *.lightfieldcamera.com.cn at it.
+  log_level:
+    name: Log level
+  capture:
+    name: Capture robot frames
+    description: Debugging only. Logs every robot frame to /data/capture.jsonl (grows ~14 MB/h with the map open).
