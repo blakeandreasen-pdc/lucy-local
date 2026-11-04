@@ -108,16 +108,6 @@ with `http://<Server IP>:8110`. You get:
 The add-on's own MQTT bridge (Settings → Home Assistant in the web UI) is the older way
 in. Use one or the other, or the robot appears twice.
 
-## Moving from the Docker version
-
-Stop the old stack first: only one server can answer the robot. Point DNS at this host,
-then reboot the robot.
-
-Schedules, profile edits and settings stay with the old install. To bring them over, copy
-`settings.json`, `profiles.json`, `schedule.json` and `device.json` from the old `/data`
-volume into this add-on's `/data` (for example with `docker cp` from the Advanced SSH &
-Web Terminal add-on), then restart the add-on.
-
 ## Troubleshooting
 
 **The robot stays offline.** Check that DNS answers with the Server IP, that the robot was
