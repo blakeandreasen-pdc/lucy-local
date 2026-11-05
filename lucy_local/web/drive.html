@@ -36,6 +36,10 @@ html, body { height: 100%; overflow: hidden; background: #000; touch-action: non
 #actions { position: fixed; right: max(18px, env(safe-area-inset-right)); bottom: max(26px, env(safe-area-inset-bottom)); display: grid; grid-template-columns: repeat(2, 76px); gap: 10px; }
 #actions button { height: 64px; flex-direction: column; gap: 2px; font-size: 12px; border-radius: 12px; }
 #actions .i { font-size: 20px; line-height: 1; }
+#fan { position: fixed; right: max(18px, env(safe-area-inset-right)); bottom: calc(max(26px, env(safe-area-inset-bottom)) + 234px); display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 12px; font-size: 12px; }
+#fan > span { color: var(--muted); padding: 0 2px; }
+#fan button { padding: 6px 9px; border-radius: 9px; font-size: 12px; background: transparent; border-color: transparent; }
+#fan button.on { background: rgba(62, 207, 142, .28); border-color: var(--ok); }
 #stop { grid-column: span 2; height: 72px !important; background: rgba(240, 86, 107, .9) !important; font-weight: 700; font-size: 14px !important; }
 
 #help { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.55); padding: 20px; z-index: 20; }
@@ -53,6 +57,7 @@ kbd { background: rgba(255,255,255,.12); border-radius: 4px; padding: 0 5px; fon
 }
 @media (max-width: 380px) {
   #actions { grid-template-columns: repeat(2, 66px); gap: 8px; }
+  #fan { bottom: calc(max(26px, env(safe-area-inset-bottom)) + 234px); }
   #stick { width: 150px; height: 150px; } #knob { width: 64px; height: 64px; }
 }
 </style>
@@ -87,6 +92,8 @@ kbd { background: rgba(255,255,255,.12); border-radius: 4px; padding: 0 5px; fon
   <div class="label">drag to drive</div>
 </div>
 
+<div id="fan" class="glass" hidden title="Vacuum while driving (V)"><span>Vacuum</span></div>
+
 <div id="actions">
   <button class="glass" data-act="start"><span class="i">▶</span>Clean</button>
   <button class="glass" data-act="pause"><span class="i">⏸</span>Pause</button>
@@ -100,7 +107,8 @@ kbd { background: rgba(255,255,255,.12); border-radius: 4px; padding: 0 5px; fon
   <p>Drag the stick the way you want to go and let go to stop. Manual mode switches on by itself and back off after 2 minutes without driving.</p>
   <ul>
     <li>Up: forward. A little off up: gentle turn, further: sharper turn. Sideways: spin. Down: reverse.</li>
-    <li>Keys: <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or arrows. <kbd>W</kbd>+<kbd>A</kbd> curves, <kbd>A</kbd> alone spins, <kbd>Shift</kbd> gentler. <kbd>Space</kbd> stop, <kbd>P</kbd> snapshot, <kbd>T</kbd> talk on/off, <kbd>F</kbd> full screen.</li>
+    <li>Keys: <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or arrows. <kbd>W</kbd>+<kbd>A</kbd> curves, <kbd>A</kbd> alone spins, <kbd>Shift</kbd> gentler. <kbd>Space</kbd> stop, <kbd>V</kbd> vacuum level, <kbd>P</kbd> snapshot, <kbd>T</kbd> talk on/off, <kbd>F</kbd> full screen.</li>
+    <li>Vacuum: turns the fan on while you drive. It goes off when manual mode ends.</li>
     <li>Game controller: left stick drives, <b>B</b> stops, <b>Y</b> snapshot.</li>
   </ul>
   <p>Without root the robot has 8 fixed moves, so the stick snaps to the nearest. The label at the top shows which. If a move is wrong for your model, remap it in Settings.</p>
@@ -164,10 +172,45 @@ function connectWs() {
     if (!m.ok) { toast(m.error || 'drive error', true); return; }
     $('mode-txt').textContent = m.entering ? 'Entering manual…' : m.manual ? 'Manual' : 'Auto';
     $('mode-dot').className = 'dot ' + (m.entering ? 'warn' : m.manual ? 'ok' : '');
+    showFan(m.fan);
   };
 }
 connectWs();
 const tell = (move) => { if (wsReady) ws.send(JSON.stringify({move})); };
+
+// ---------------------------------------------------------------- vacuum while driving
+// The profile's manual_fan choices (MANBLOWER on the Max): Off / Low / Medium / High.
+let fanLevels = [], fanBusy = false;
+function showFan(level) {
+  if (level == null) return;
+  for (const b of $('fan').querySelectorAll('button')) b.classList.toggle('on', b.dataset.v === String(level));
+}
+async function setFan(v) {
+  if (fanBusy) return;
+  fanBusy = true;
+  try {
+    const st = await api('api/drive/fan', {body: {value: v}});
+    showFan(st.fan);
+    const label = (fanLevels.find(([k]) => k === st.fan) || [, st.fan])[1];
+    toast(st.fan === '-1' ? 'Vacuum off' : 'Vacuum ' + label.toLowerCase());
+  } catch (e) { toast('Vacuum: ' + e.message, true); }
+  fanBusy = false;
+}
+function cycleFan() {
+  if (!fanLevels.length) return;
+  const cur = $('fan').querySelector('button.on'), keys = fanLevels.map(([k]) => k);
+  const i = cur ? keys.indexOf(cur.dataset.v) : 0;
+  setFan(keys[(i + 1) % keys.length]);
+}
+api('api/actions').then((a) => {
+  const c = a.manual_fan && a.manual_fan.choices;
+  if (!c) return;
+  // numeric order (Off = -1 first); JS would otherwise list "-1" after "0".."2"
+  fanLevels = Object.entries(c).sort(([a], [b]) => Number(a) - Number(b));
+  $('fan').append(...fanLevels.map(([v, label]) => h('button', {'data-v': v, onclick: () => setFan(v)}, label)));
+  showFan('-1');
+  $('fan').hidden = false;
+}).catch(() => {});
 
 // ---------------------------------------------------------------- moves
 const MOVES = {
@@ -249,6 +292,7 @@ document.addEventListener('keydown', (e) => {
   if (k === ' ') { e.preventDefault(); stopAll(); return; }
   if (!e.repeat && k === 'p') return snapshot();
   if (!e.repeat && k === 't') return talk.toggle();
+  if (!e.repeat && k === 'v') return cycleFan();
   if (!e.repeat && k === 'f') return toggleFs();
   if (!e.repeat && k === '?') return $('help').classList.toggle('show');
   if (k === 'escape') return $('help').classList.remove('show');

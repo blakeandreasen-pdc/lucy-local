@@ -22,7 +22,9 @@ from .entity import LucyEntity
 async def async_setup_entry(hass: HomeAssistant, entry: LucyConfigEntry,
                             async_add_entities: AddEntitiesCallback) -> None:
     c = entry.runtime_data
-    async_add_entities(LucySelect(c, name, a) for name, a in c.actions.items() if a.get("choices"))
+    # manual-mode choices (the driving fan) belong to the drive page, not a standing setting
+    async_add_entities(LucySelect(c, name, a) for name, a in c.actions.items()
+                       if a.get("choices") and a.get("group") not in ("drive", "manual"))
 
 
 class LucySelect(LucyEntity, SelectEntity, RestoreEntity):

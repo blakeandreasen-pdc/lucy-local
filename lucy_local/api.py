@@ -279,6 +279,18 @@ def create_app(robot: Robot, profiles: ProfileStore, driver: Driver, scheduler: 
         finally:
             await driver.move(None)
 
+    @app.post("/api/drive/fan")
+    async def drive_fan(body: ActionBody):
+        """Vacuum fan while driving (the profile's manual_fan): value "-1" off, "0"-"2" low-high."""
+        try:
+            return await driver.set_fan(str(body.value))
+        except KeyError:
+            raise HTTPException(400, f"profile {profiles.active_id} has no manual_fan action")
+        except ValueError as e:
+            raise HTTPException(422, str(e))
+        except ConnectionError as e:
+            raise not_connected(e)
+
     @app.post("/api/drive/manual")
     async def manual(body: ActionBody):
         try:

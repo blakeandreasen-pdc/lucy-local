@@ -1,5 +1,5 @@
 name: Lucy Local
-version: "0.1.1"
+version: "0.1.2"
 slug: lucy_local
 description: Local cloud for Trifo robot vacuums (Max, Lucy), with camera, map and control panel
 url: https://github.com/blakeandreasen-pdc/lucy-local

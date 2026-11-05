@@ -3,6 +3,7 @@
 Without root the robot only takes MANCTRL commands:
   S enters manual mode, K keeps it (she drops out after ~14 s without one), E leaves,
   ANGLE:N moves one of 8 fixed ways, ANGLE:0 stops.
+  MANBLOWER (the profile's manual_fan) sets the vacuum fan while in manual mode.
 
 Clients call `move(name)` whenever the wanted direction changes and repeat it at
 least every DEADMAN_S while driving. If they go quiet (tab closed, Wi-Fi dropped)
@@ -32,6 +33,7 @@ class Driver:
         self.robot = robot
         self.manual = False
         self.move_name: str | None = None
+        self.fan = "-1"                  # manual_fan level last sent ("-1" = off)
         self._last_seen = 0.0
         self._last_drive = 0.0
         self._entering: asyncio.Task | None = None
@@ -39,7 +41,7 @@ class Driver:
 
     def state(self) -> dict:
         return {"manual": self.manual, "entering": bool(self._entering and not self._entering.done()),
-                "move": self.move_name}
+                "move": self.move_name, "fan": self.fan}
 
     async def enter_manual(self) -> None:
         if self.manual:
@@ -61,11 +63,38 @@ class Driver:
     async def exit_manual(self) -> None:
         await self.halt()
         if self.manual:
+            try:
+                if self.fan != "-1":
+                    await self.robot.run_action("manual_fan", "-1")
+                    await asyncio.sleep(0.2)
+            except (ConnectionError, KeyError):
+                pass
+            self.fan = "-1"
             self.manual = False
             try:
                 await self.robot.run_action("manual_exit")
             except ConnectionError:
                 pass
+
+    async def set_fan(self, level: str) -> dict:
+        """Vacuum fan while driving: "-1" off, "0" low, "1" medium, "2" high (the profile's
+        manual_fan choices). Turns manual mode on if needed; leaving it turns the fan off."""
+        action = self.robot.profiles.active.actions.get("manual_fan")
+        if action is None:
+            raise KeyError("manual_fan")
+        level = str(level)
+        if level not in (action.choices or {}):
+            raise ValueError(f"fan level must be one of {', '.join(action.choices or {})}")
+        now = time.monotonic()
+        self._last_seen = self._last_drive = now      # counts as activity for the idle exit
+        if level != "-1":
+            await self.enter_manual()
+        elif not self.manual:
+            self.fan = "-1"
+            return self.state()
+        await self.robot.run_action("manual_fan", level)
+        self.fan = level
+        return self.state()
 
     async def move(self, name: str | None) -> dict:
         """name: one of DRIVE_ACTIONS, or None/'' to stop."""
@@ -121,5 +150,6 @@ class Driver:
             except ConnectionError:
                 self.move_name = None
                 self.manual = False
+                self.fan = "-1"
             except Exception:
                 log.exception("drive loop")
