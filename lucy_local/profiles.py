@@ -37,7 +37,8 @@ class Command(BaseModel):
 
 class Action(BaseModel):
     label: str
-    group: Literal["basic", "settings", "drive", "manual", "camera", "status"]
+    # "extra": actions added in the profile editor; the dashboard shows them as extra controls
+    group: Literal["basic", "settings", "drive", "manual", "camera", "status", "extra"]
     commands: list[Command]
     takes_value: bool = False
     min: int | None = None

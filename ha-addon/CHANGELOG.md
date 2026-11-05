@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.4
+
+- Settings: new **Try a command** card. Send any rx or dp command without editing a profile,
+  start from one of the profile's commands, and watch replies arrive (the one you're waiting
+  for turns green). **Add to profile…** turns a command that works into an action
+- Profiles: everything is editable, including built-ins. Saving a built-in saves your own copy
+  and offers to switch to it. Actions can take no value, a number range or a list of choices,
+  and **+ Add action** creates your own actions, which show on the dashboard under **Extra**
+
 ## 0.1.3
 
 - Drive page **Vacuum** levels fixed. The robot takes the fan as a percentage (0-100), not

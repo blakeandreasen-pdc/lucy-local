@@ -63,6 +63,7 @@
         <div class="slider"><span>Volume</span><input type="range" id="volume" min="0" max="100" step="1"><output id="volume-out">--</output></div>
         <div class="row" id="lang-row" hidden><span>Voice language</span><select id="lang" aria-label="Voice language"></select></div>
         <div class="row"><button id="mute-btn">Mute / unmute</button><button id="unmute-btn" hidden>Voice on</button><span class="muted small" id="mute-state"></span></div>
+        <div id="extras" hidden style="display:grid;gap:8px"><h3 class="group-title" style="margin:4px 0 0">Extra</h3></div>
       </section>
 
       <section class="card">
@@ -171,6 +172,26 @@ api('api/actions').then((a) => {
     };
     $('lang-row').hidden = false;
   }
+}).catch(() => {});
+
+// actions added in the profile editor (group "extra"): a button, a number, or a dropdown
+api('api/actions').then((a) => {
+  const extras = Object.entries(a).filter(([, x]) => x.group === 'extra');
+  for (const [name, x] of extras) {
+    if (x.choices) {
+      const sel = h('select', {'aria-label': x.label}, h('option', {value: '', disabled: true, selected: true}, 'Choose…'),
+        ...Object.entries(x.choices).map(([v, l]) => h('option', {value: v}, l)));
+      sel.onchange = async () => { if (await act(name, sel.value)) toast(x.label + ': ' + x.choices[sel.value] + ' sent'); };
+      $('extras').append(h('div', {class: 'row'}, h('span', {}, x.label), sel));
+    } else if (x.takes_value) {
+      const n = h('input', {type: 'number', min: x.min, max: x.max, value: x.min ?? 0, 'aria-label': x.label, style: 'width:90px'});
+      $('extras').append(h('div', {class: 'row'}, h('span', {}, x.label), n,
+        h('button', {class: 'small', onclick: async () => { if (await act(name, n.value)) toast(x.label + ' ' + n.value + ' sent'); }}, 'Send')));
+    } else {
+      $('extras').append(h('div', {class: 'row'}, h('button', {onclick: async () => { if (await act(name)) toast(x.label + ' sent'); }}, x.label)));
+    }
+  }
+  $('extras').hidden = !extras.length;
 }).catch(() => {});
 
 api('api/settings').then((s) => {
