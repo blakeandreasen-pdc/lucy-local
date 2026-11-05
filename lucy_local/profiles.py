@@ -81,11 +81,12 @@ _COMMON_ACTIONS = {
     "manual_enter": {"label": "Enter manual mode", "group": "manual", "commands": [rx("MANCTRL", "S")]},
     "manual_keepalive": {"label": "Keep manual mode", "group": "manual", "commands": [rx("MANCTRL", "K")]},
     "manual_exit": {"label": "Leave manual mode", "group": "manual", "commands": [rx("MANCTRL", "E")]},
-    # The app's manual screen (ManCtrlActivity, used for the Max and Lucy) has fan buttons
-    # sending MANBLOWER on key 2: -1 off, 0 low, 1 medium, 2 high. Untested on hardware yet.
+    # The app's manual screen (ManCtrlActivity) sends MANBLOWER on key 2 as a fan percentage,
+    # 0 (off) to 100 in steps of 5, from a slider. CommandKey's -1/0/1/2 constants are unused
+    # leftovers: tested on the Max 2026-11, "-1" ran the fan at full and "1"/"2" barely at all.
     "manual_fan": {"label": "Vacuum while driving", "group": "manual",
                    "commands": [rx("MANBLOWER", "{value}")],
-                   "choices": {"-1": "Off", "0": "Low", "1": "Medium", "2": "High"}},
+                   "choices": {"0": "Off", "30": "Low", "60": "Medium", "100": "High"}},
     "forward": _drive(4, "Forward"),
     "gentle_left": _drive(5, "Gentle left"),
     "gentle_right": _drive(3, "Gentle right"),

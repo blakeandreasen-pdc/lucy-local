@@ -192,7 +192,7 @@ async function setFan(v) {
     const st = await api('api/drive/fan', {body: {value: v}});
     showFan(st.fan);
     const label = (fanLevels.find(([k]) => k === st.fan) || [, st.fan])[1];
-    toast(st.fan === '-1' ? 'Vacuum off' : 'Vacuum ' + label.toLowerCase());
+    toast(st.fan === '0' ? 'Vacuum off' : 'Vacuum ' + label.toLowerCase());
   } catch (e) { toast('Vacuum: ' + e.message, true); }
   fanBusy = false;
 }
@@ -205,10 +205,10 @@ function cycleFan() {
 api('api/actions').then((a) => {
   const c = a.manual_fan && a.manual_fan.choices;
   if (!c) return;
-  // numeric order (Off = -1 first); JS would otherwise list "-1" after "0".."2"
+  // numeric order: JS lists integer-like keys first, so sort to be explicit
   fanLevels = Object.entries(c).sort(([a], [b]) => Number(a) - Number(b));
   $('fan').append(...fanLevels.map(([v, label]) => h('button', {'data-v': v, onclick: () => setFan(v)}, label)));
-  showFan('-1');
+  showFan('0');
   $('fan').hidden = false;
 }).catch(() => {});
 

@@ -281,7 +281,7 @@ def create_app(robot: Robot, profiles: ProfileStore, driver: Driver, scheduler: 
 
     @app.post("/api/drive/fan")
     async def drive_fan(body: ActionBody):
-        """Vacuum fan while driving (the profile's manual_fan): value "-1" off, "0"-"2" low-high."""
+        """Vacuum fan while driving (the profile's manual_fan): a percentage, "0" = off."""
         try:
             return await driver.set_fan(str(body.value))
         except KeyError:

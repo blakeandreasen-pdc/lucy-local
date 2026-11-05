@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.3
+
+- Drive page **Vacuum** levels fixed. The robot takes the fan as a percentage (0-100), not
+  the -1/0/1/2 levels used in 0.1.2, so Off ran the fan at full and Medium/High barely ran it.
+  Levels are now Off 0 %, Low 30 %, Medium 60 %, High 100 %
+
 ## 0.1.2
 
 - Drive page: **Vacuum** selector (Off, Low, Medium, High, or the <kbd>V</kbd> key) turns the
