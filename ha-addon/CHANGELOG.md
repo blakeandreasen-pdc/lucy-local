@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.7
+
+- A factory-reset robot now reconnects. After a reset the Max registers without its serial
+  number and kept retrying every 10 seconds; it's now given back the device id on file for its
+  MAC address (or one made from the MAC for a robot never seen before)
+
 ## 0.1.6
 
 - New **Profiles** tab: **Try a command** and the profile editor moved here from Settings, which
