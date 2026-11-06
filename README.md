@@ -122,15 +122,6 @@ On **Settings**, **Try a command** sends any command and shows the robot's reply
 
 State codes seen on the Max: **1** = cleaning and **5** = returning (as on the Lucy), **12** and **14** = on the dock (at any charge level), **10** = on the dock after a run, **20** = docked with only the camera on. They're named for what was observed. Rename them in the profile as you learn more; lucy-local logs every state change.
 
-## Things learned the hard way
-
-- **Never answer the robot's "who is my owner" question** (info type 0) with a guess. A wrong user id makes it unbind itself. Only the bind-status question (type 2) is answered.
-- **Driving is 8 fixed moves** without root. Each `ANGLE:N` starts a short motion, and holding a direction means resending it every ~200 ms. `ANGLE:0` stops. Manual mode needs `MANCTRL K` every 3 s or the robot drops out after ~14 s.
-- **The camera wakes** with `RTMP_THROB` + `STREAM_CONTROL 1` (key 10) every 2.5 s. The robot then pushes 640×480 H.264 over RTMP to `pt.lightfieldcamera.com.cn`. No owner reply is needed.
-- **The map** comes from `GET_MAP` on rx key 8: about 10 s later the Max answers with base64 of an uncompressed grid (`ogm\0`, u32 0, u32 width, u32 height, f64 cell size, one byte per cell, occupancy 0–10: 5 unknown, below 5 free, above 5 obstacle), then little-endian doubles: dock x, y, heading and robot x, y, heading (just the robot when there are three). Metres map to cells as `row = (height·cell/2 − x)/cell − 0.5`, `col = (width·cell/2 − y)/cell − 0.5`, the same as the Trifo app's decoder. The Lucy's key-18 map commands get no answer from the Max.
-- **Talk** is `START_TALK <id>` on key 14: the robot pulls `app-name/<id>` as AAC over RTMP from its stream host and plays it, while its own live stream runs. The browser's Opus mic is converted by `docker/mediamtx/talk-relay.sh`. On the Max this does nothing audible: it pulls the stream and replies `0,<id>`, but stays silent with AAC at 8, 16 and 44.1 kHz, with MP3, in manual mode, and in both mute states. The Max's own stream has no audio track, and its manual mentions no microphone, so there's no listening.
-- **Status reports only arrive on a change**, so the server asks for status whenever its copy is over a minute old. A status request sent within a couple of seconds of the robot logging in is ignored, so the first one waits 8 s and is retried.
-
 ## Home Assistant
 
 There are two ways in. Use one, not both, or the robot shows up twice.
