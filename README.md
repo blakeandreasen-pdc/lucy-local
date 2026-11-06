@@ -1,15 +1,48 @@
 # lucy-local
 
-A local replacement for the dead Trifo cloud, for Trifo robot vacuums (tested on a **Trifo Max**, with a profile for the **Lucy**). It doesn't need root on the robot.
+**Your Trifo robot vacuum works again, without Trifo.**
 
-- **Local cloud:** the robot connects to this server instead of Trifo's (dispatch, MQTT, registration, heartbeats).
-- **Dashboard:** status, clean/pause/dock/find, suction, volume and mute, live camera and snapshots.
-- **Map:** the robot's map on the dashboard with its position, heading and dock, refreshed every few seconds while it's on screen (Trifo Max, via `GET_MAP`).
-- **Talk** (Lucy profile): speak through the robot's speaker from the dashboard or Drive page. Browsers only allow the microphone on HTTPS pages, so use it through an HTTPS proxy. The Max accepts the talk command and downloads the audio but plays nothing, so its profile has no Talk.
-- **Drive page:** a full-screen camera with a thumb joystick, WASD/arrow keys, or a game controller. The server switches manual mode on and off and has a dead-man stop.
-- **Control profiles:** map each control to the command your model actually accepts, and test it live from the Settings page.
-- **Schedules**, with optional suction per run.
-- **Home Assistant:** a custom integration (vacuum, live map, camera, battery, suction, volume, voice settings, go-to-point), or the simpler MQTT discovery bridge.
+Trifo, the company behind the Lucy and Max robot vacuums, went under, and its cloud servers went
+with it. The robots were built to do everything through that cloud. When it's unreachable the app
+can't reach them, so there's no remote control, camera or map. The hardware still works
+fine; it just has nobody to talk to.
+
+lucy-local is a small server you run at home that stands in for Trifo's cloud. There's no need to
+open the robot, root it, or flash anything.
+
+## The trick: one DNS change
+
+The robot finds its cloud by name: `eudispatch.trifo.com`, `euiot.trifo.com` and, for the camera,
+`pt.lightfieldcamera.com.cn`. If your home network answers those names with the address of your own
+server, the robot connects there instead and can't tell the difference:
+
+```
+before:  robot ──▶ eudispatch.trifo.com ──▶ Trifo's servers        (gone, robot stuck)
+after:   robot ──▶ eudispatch.trifo.com ──▶ your DNS: "it's here" ──▶ lucy-local on your LAN
+```
+
+So the whole setup is two wildcard DNS rules on your router, Pi-hole, AdGuard Home or similar
+(`*.trifo.com` and `*.lightfieldcamera.com.cn` → your server), plus running lucy-local. The robot
+logs in, reports its status, takes commands and streams its camera, all inside your home network.
+None of it needs the internet.
+
+## What you get
+
+- **Dashboard:** status and battery, clean/pause/dock/find, suction, volume and voice settings,
+  live camera and snapshots, and the robot's schedule.
+- **Live map** with the robot's position, heading and dock. Tap the map to send the robot to that
+  spot (Trifo Max).
+- **Drive page:** a full-screen camera with a thumb joystick, keyboard or game controller, and the
+  vacuum on while you drive. The server handles manual mode and stops the robot if the
+  connection drops.
+- **Home Assistant:** an add-on that runs everything inside HA (with a sidebar panel), and an
+  integration with a vacuum entity, live map, camera, battery, suction and go-to-point. An MQTT
+  bridge is there too if you prefer that.
+- **Control profiles and a command tester:** models differ in small ways, so each control is
+  mapped to the command your robot accepts. Built in: the **Trifo Max** (tested) and the **Trifo
+  Lucy** (from the upstream research). You can try any command from the Settings page and add the
+  ones that work.
+- **Talk** through the robot's speaker (Lucy profile only; the Max has no working speaker stream).
 
 ## How it works
 
@@ -20,9 +53,32 @@ robot ──RTMP 1935─▶ MediaMTX ──WebRTC──▶ browser   (camera, on
 browser ─HTTP 8110─▶ lucy-local web UI / API ──▶ robot
 ```
 
-DNS sends the robot's cloud names to this host, so it never knows the difference.
+- **Dispatch and MQTT:** the robot asks the dispatch service which broker to use and is told
+  "this one". It then logs in over MQTT, as it did with Trifo, and that's where status reports
+  come in and commands go out.
+- **Camera:** when someone opens the camera, lucy-local asks the robot to start its live stream.
+  The robot pushes ordinary H.264 over RTMP to its stream host, which DNS also points here.
+  [MediaMTX](https://github.com/bluenviron/mediamtx) receives it and serves it to browsers
+  (WebRTC) and Home Assistant (RTSP). The camera stops a minute after the last viewer leaves.
+- **Everything else** (map, go-to-point, driving, voice settings) uses the same commands the
+  official Trifo app sends.
 
 ## Setup
+
+### Option 1: Home Assistant add-on
+
+The `ha-addon/` folder runs lucy-local and MediaMTX together as a Supervisor add-on (amd64,
+aarch64). Prebuilt images are on `ghcr.io/blakeandreasen-pdc/lucy-local-addon-{arch}`.
+
+1. In the add-on store: **⋮ → Repositories**, add `https://github.com/blakeandreasen-pdc/lucy-local`.
+2. Install **Lucy Local**, set **Server IP** to the HA host's LAN address, and start it.
+3. **DNS:** point `*.trifo.com` and `*.lightfieldcamera.com.cn` at the HA host.
+4. Restart the robot (or wait a minute). It shows up in the **Robot vacuum** sidebar panel.
+
+If 443 is taken on the HA host, clear it under the add-on's **Network** settings; the robot only
+uses it for update checks. The add-on's Documentation tab has the details.
+
+### Option 2: Docker Compose
 
 1. **DNS:** on the resolver the robot uses, point these at the docker host:
    - `*.trifo.com`: the cloud (`euiot`, `eudispatch`)
@@ -33,7 +89,8 @@ DNS sends the robot's cloud names to this host, so it never knows the difference
    cp .env.example .env      # set SERVER_IP (this host's LAN IP) and TZ
    docker compose up -d --build
    ```
-3. Open `http://<host>:8110`. The robot connects within a minute of the server starting (or right away after a reboot).
+3. Open `http://<host>:8110`. The robot connects within a minute of the server starting (or right
+   away after a reboot).
 
 | Port | For |
 |---|---|
@@ -44,15 +101,8 @@ DNS sends the robot's cloud names to this host, so it never knows the difference
 | 8554 | the camera over RTSP (`rtsp://<host>:8554/lucy`, used by the Home Assistant integration) |
 | 8110 | the web UI and API (`/api/docs` lists every endpoint) |
 
-### As a Home Assistant add-on
-
-The `ha-addon/` folder runs lucy-local and MediaMTX together as a Supervisor add-on (amd64, aarch64). GitHub Actions builds the image into `ghcr.io/blakeandreasen-pdc/lucy-local-addon-{arch}` on every push that touches the server.
-
-1. In the add-on store: **⋮ → Repositories**, add `https://github.com/blakeandreasen-pdc/lucy-local`.
-2. Install **Lucy Local**, set **Server IP** to the HA host's LAN address, and start it.
-3. Point the DNS entries at the HA host instead, and reboot the robot.
-
-The web UI opens inside Home Assistant (sidebar entry, through ingress); it's also on port 8110, which the integration uses. The add-on uses the same robot and camera ports as the compose stack. If 443 is taken on the HA host, clear it under the add-on's **Network** settings; the robot only uses it for update checks. Bump `version` in `ha-addon/config.yaml` to ship a new build to HA.
+The robot must already be on your Wi-Fi. If it isn't, see the upstream project's
+[Wi-Fi setup without the app](https://github.com/Gophercs/trifo_lucy_re#wifi-setup-without-app).
 
 ## Control profiles
 
@@ -61,12 +111,13 @@ Each control is an **action** (for example `reverse`, `set_suction` or `camera_w
 - `dp`: a smart-speaker data point, e.g. `dp 2 = start`, or `blowerMode:{value}`
 - `rx`: an app command, e.g. `MANCTRL` / `ANGLE:4` on key `2`
 
-The built-in profiles are read-only. On **Settings**, duplicate one, change what you need, press **Test** to send one command and see the robot's reply, then save and switch to it.
+On **Settings**, **Try a command** sends any command and shows the robot's reply as it arrives (the Max can take 1–2 minutes). Every profile field is editable; saving a built-in profile saves your own copy, so the built-ins stay as shipped and updates can fix them. Actions can take a number or a list of choices, and actions you add appear on the dashboard under **Extra**.
 
 | | Trifo Max | Trifo Lucy |
 |---|---|---|
 | Reverse | `ANGLE:10` | `ANGLE:8` |
 | Suction | app `BLOWER` (rx key 2), applied 1–3 min later; `blowerMode:N` is ignored | `blowerMode:N` |
+| Fan while driving | `MANBLOWER` 0–100 (percent; 0 = off) | (untested) |
 | Status query | `ALL_INFO` (it answers with both the semicolon and the JSON form; asking for `ALL_INFO_JSON` directly returns nothing) | `ALL_INFO_JSON` |
 
 State codes seen on the Max: **1** = cleaning and **5** = returning (as on the Lucy), **12** and **14** = on the dock (at any charge level), **10** = on the dock after a run, **20** = docked with only the camera on. They're named for what was observed. Rename them in the profile as you learn more; lucy-local logs every state change.
@@ -127,6 +178,28 @@ python3 -m venv .venv && .venv/bin/pip install -e .
 SERVER_IP=127.0.0.1 DATA_DIR=./data HTTPS_PORT=0 WEB_PORT=8080 .venv/bin/python -m lucy_local
 ```
 
-## Credits
+GitHub Actions builds the add-on image on every push that touches the server; bump `version` in `ha-addon/config.yaml` to ship it to Home Assistant.
 
-The protocol knowledge comes from the reverse-engineering work in [Gophercs/trifo_lucy_re](https://github.com/Gophercs/trifo_lucy_re) and earlier Trifo research by Victor Drijkoningen and the r/RobotVacuums community. lucy-local is a fresh implementation of that knowledge, not a copy of their code. It isn't affiliated with Trifo.
+## Credits and thanks
+
+lucy-local stands on other people's reverse-engineering. None of it would exist without them.
+
+- **[Gophercs/trifo_lucy_re](https://github.com/Gophercs/trifo_lucy_re)** by **Chloe
+  ([@Gophercs](https://github.com/Gophercs))** and Claude. They worked out the Trifo cloud
+  protocol on a Lucy: the dispatch and MQTT login, the command channel, status reports, manual
+  driving, the camera stream and where it goes, and the fact that a DNS redirect is all it takes.
+  Their project also covers what needs root (full map editing, both cameras, the microphone) and
+  Wi-Fi setup without the app. If you have a Lucy, start there.
+- **Victor Drijkoningen**, for the earlier
+  [Trifo Max reverse-engineering](https://github.com/VictorDrijkoningen/trifo-robotics-rev-eng).
+- **Reddit u/ThatsALovelyShirt**, for
+  [prior Trifo Max work](https://www.reddit.com/r/RobotVacuums/comments/1d1120l/comment/m0m11og),
+  and the **r/RobotVacuums** community for keeping these robots alive.
+- [MediaMTX](https://github.com/bluenviron/mediamtx), which carries the camera stream.
+
+lucy-local is a separate implementation written from that published knowledge, not a copy of the
+upstream code, and adds what was found on the Max (map without root, go-to-point, the Max's
+command differences). The Max findings are written up for upstream in
+[a fork of their repo](https://github.com/blakeandreasen-pdc/trifo_lucy_re/blob/max-notes/docs/trifo_max.md).
+
+Not affiliated with or endorsed by Trifo. Use at your own risk.
