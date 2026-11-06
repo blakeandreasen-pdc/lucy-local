@@ -349,10 +349,20 @@ class Robot:
 
     async def _on_register(self, session: dict, body: dict, seq: int) -> None:
         data = body["data"]
+        mac = data.get("mac", "")
         sn = data.get("sn", "")
+        if not sn:
+            # After a factory reset the Max registers with sn "" and pf "11" (normally "00") and
+            # retries every 10 s until it's given a device id. Trifo's cloud would have answered
+            # with the id it had on file; do the same from device.json, or derive one from the MAC
+            # for a robot we've never seen.
+            known = self.device.serial if self.device.serial and self.device.mac == mac else ""
+            sn = known or mac.replace(":", "").upper()
+            log.info("robot registered without a serial (pf %s, after a reset?); giving it %s",
+                     data.get("pf"), sn)
         self.device.serial = sn
         self.device.subid = sn[:-1] if len(sn) > 1 else sn
-        self.device.mac = data.get("mac", "")
+        self.device.mac = mac
         self.device.topic = session.get("topic", "")
         self.device.product_id = (body.get("req") or {}).get("product_id") or self.device.product_id
         self.device.region = session.get("region") or getattr(self, "_last_region", "") or self.device.region
