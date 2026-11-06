@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.9
+
+- Map: a map the robot started away from its dock (dock position 9999, 9999) no longer puts
+  the dock far off the map; it's shown without a dock until the robot finds it
+
 ## 0.1.8
 
 - A factory-reset robot (back on its factory firmware) no longer drops its connection every

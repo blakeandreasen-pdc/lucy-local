@@ -50,7 +50,10 @@ class GridMap:
 
     @property
     def dock(self) -> dict | None:
-        return self._pose(*self.extra[0:3]) if len(self.extra) >= 6 else None
+        # A map started away from the dock (e.g. after a factory reset) has dock 9999, 9999.
+        if len(self.extra) < 6 or abs(self.extra[0]) >= 9000 or abs(self.extra[1]) >= 9000:
+            return None
+        return self._pose(*self.extra[0:3])
 
     @property
     def robot(self) -> dict | None:
