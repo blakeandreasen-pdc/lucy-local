@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.5
+
+- Settings: **Wi-Fi setup** card. Enter your Wi-Fi name and password and it shows the QR code
+  the robot reads in network-configuration mode, the same code the Trifo app made. It's
+  generated in your browser (bundled qrcode-generator, MIT); the password isn't sent or saved.
+  Tap it for full screen
+
 ## 0.1.4
 
 - Settings: new **Try a command** card. Send any rx or dp command without editing a profile,
