@@ -45,6 +45,10 @@ OP_TX = 0x0403            # robot's reply to an app command
 OP_UPDPS = 0x0503         # robot publishes data points (status)
 OP_DOWNDPS = 0x0504       # we send data points (smart-speaker commands)
 OP_UPDPS_ALT = 0x0B06
+# Bind / unbind results the cloud pushes (libtrifo_core_cloud qlcloud_process_bindinfo): a body of
+# {"res":{"errcode":0}} sets the robot's bind state to bound (0x0B02, 0x0B07) or unbound (0x0B03).
+OP_BIND = 0x0B02
+OP_UNBIND = 0x0B03
 
 HEADER_LEN = 16
 

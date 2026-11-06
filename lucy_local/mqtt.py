@@ -94,6 +94,13 @@ def parse_connect_client_id(pkt: bytes) -> str:
     return client_id
 
 
+def parse_connect_keepalive(pkt: bytes) -> int:
+    """Keep-alive seconds from a CONNECT (the client must send something at least this often)."""
+    _, offset = decode_length(pkt)
+    _, offset = _string(pkt, offset)     # protocol name
+    return struct.unpack_from("!H", pkt, offset + 2)[0]
+
+
 def connack() -> bytes:
     return bytes([0x20, 0x02, 0x00, 0x00])
 

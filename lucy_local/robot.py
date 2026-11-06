@@ -189,6 +189,21 @@ class Robot:
             self._writer.write(pkt)
             await self._writer.drain()
 
+    async def _send_bind(self) -> None:
+        """A reset robot is unbound: it polls "am I bound?" and drops its session every minute or
+        two. Trifo's cloud pushed a bind result once the app had bound it to an account; send
+        that ourselves."""
+        await asyncio.sleep(3)
+        try:
+            await self._send(ql.OP_BIND, {"res": {"errcode": 0}})
+            await asyncio.sleep(0.5)
+            # data point 769 (0x0301) = "app bind success" (dp_down_handle_bind_success ->
+            # CloudServer::SetAppBindStatus(2)); its value isn't read
+            await self.send_dp(769, "1")
+            log.info("sent bind result and app-bind-success to the reset robot")
+        except ConnectionError:
+            pass
+
     async def send_dp(self, dp_id: int, value: str) -> None:
         await self._send(ql.OP_DOWNDPS, {"data": [{"i": dp_id, "v": value}],
                                          "subid": self.device.subid,
@@ -322,7 +337,9 @@ class Robot:
                 if item:
                     self._on_reply(item)
         elif op == ql.OP_HEARTBEAT:
-            await self._reply(session, ql.OP_HEARTBEAT, {"res": {"errcode": 0}}, frame.seq)
+            # qlcloud_process_heart: errcode 0 plus "value" (unix time) sets the robot's clock
+            await self._reply(session, ql.OP_HEARTBEAT, {"res": {"errcode": 0}, "value": int(time.time())},
+                              frame.seq)
         elif op == ql.OP_INFO and isinstance(body, dict):
             try:
                 kind = int((body.get("data") or {}).get("type"))
@@ -358,6 +375,7 @@ class Robot:
             # for a robot we've never seen.
             known = self.device.serial if self.device.serial and self.device.mac == mac else ""
             sn = known or mac.replace(":", "").upper()
+            self._needs_bind = True
             log.info("robot registered without a serial (pf %s, after a reset?); giving it %s",
                      data.get("pf"), sn)
         self.device.serial = sn
@@ -387,6 +405,10 @@ class Robot:
         self.status.online = True
         self._changed()
         log.info("robot online: %s", self.device.serial)
+        # Tested 2026-11-05: pushing the bind result (0x0B02) and dp 769 "app bind success" to a
+        # reset Max didn't stop it dropping its session every 0.5-2.5 min. Kept for reference.
+        if os.environ.get("BIND_AFTER_RESET") == "1" and getattr(self, "_needs_bind", False):
+            asyncio.create_task(self._send_bind())
         asyncio.create_task(self._ask_status_soon())
 
     async def _ask_status_soon(self) -> None:
@@ -403,7 +425,8 @@ class Robot:
     # ---------------------------------------------------------------- connections
     async def handle_connection(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         peer = writer.get_extra_info("peername")
-        session = {"writer": writer, "topic": None, "region": None}
+        session = {"writer": writer, "topic": None, "region": None, "peer": peer}
+        trace = log.info if self.capture else log.debug
         buf = bytearray()
         try:
             first = await asyncio.wait_for(reader.read(8192), timeout=30)
@@ -427,10 +450,13 @@ class Robot:
                     continue
                 buf += chunk
         except (asyncio.TimeoutError, ConnectionError, ssl.SSLError, OSError) as e:
-            log.debug("connection %s ended: %s", peer, e)
+            trace("conn %s client %s ended: %s", peer, session.get("client_id"), e or type(e).__name__)
         except Exception:
             log.exception("connection %s failed", peer)
         finally:
+            if session.get("client_id") is not None:
+                trace("conn %s client %s closed%s", peer, session.get("client_id"),
+                      " (the robot's main session)" if writer is self._writer else "")
             if writer is self._writer:
                 self._writer = None
                 self.status.online = False
@@ -468,6 +494,9 @@ class Robot:
             req = json.loads(body) if body else {}
         except ValueError:
             req = {}
+        (log.info if self.capture else log.debug)(
+            "http on a robot port: %s | %s", head.split(b"\r\n", 1)[0].decode("ascii", "replace"),
+            body[:600].decode("utf-8", "replace"))
         if isinstance(req, dict) and isinstance(req.get("data"), dict) and "product_sign" in req["data"]:
             d = req["data"]
             token = hashlib.sha256(os.urandom(16)).hexdigest()[:32]
@@ -482,11 +511,15 @@ class Robot:
     async def _on_mqtt(self, pkt: bytes, session: dict) -> None:
         kind = pkt[0] >> 4
         w = session["writer"]
+        trace = log.info if self.capture else log.debug
         if kind == mqtt.CONNECT:
             session["client_id"] = mqtt.parse_connect_client_id(pkt)
+            trace("conn %s mqtt CONNECT client %s keepalive %ss (%d bytes)", session.get("peer"),
+                  session["client_id"], mqtt.parse_connect_keepalive(pkt), len(pkt))
             w.write(mqtt.connack())
         elif kind == mqtt.SUBSCRIBE:
             pid, topics = mqtt.parse_subscribe(pkt)
+            trace("conn %s client %s SUBSCRIBE %s", session.get("peer"), session.get("client_id"), topics)
             if topics and not session["topic"]:
                 session["topic"] = topics[0][0]
             w.write(mqtt.suback(pid, [q for _, q in topics]))
@@ -495,13 +528,19 @@ class Robot:
             if pub.qos and pub.packet_id is not None:
                 w.write(mqtt.puback(pub.packet_id))
             frame = ql.parse_frame(pub.payload)
+            trace("conn %s client %s PUBLISH %s %s", session.get("peer"), session.get("client_id"), pub.topic,
+                  f"op 0x{frame.opcode:04X}" if frame else f"raw {pub.payload[:80]!r}")
             if frame:
                 self.record("in", frame, topic=pub.topic)
                 await self._on_frame(frame, session)
             else:
                 self.record("in", raw=pub.payload, topic=pub.topic, note="not a QLCloud frame")
         elif kind == mqtt.PINGREQ:
+            trace("conn %s client %s PINGREQ", session.get("peer"), session.get("client_id"))
             w.write(mqtt.pingresp())
+        else:
+            trace("conn %s client %s mqtt packet type %d (%d bytes)", session.get("peer"),
+                  session.get("client_id"), kind, len(pkt))
         await w.drain()
 
     def _on_map(self, data: str) -> None:

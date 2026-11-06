@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.8
+
+- A factory-reset robot (back on its factory firmware) no longer drops its connection every
+  minute or two. Heartbeat replies now carry the server time, which the robot uses to set its
+  clock
+- With capture on, the log shows each robot connection, its MQTT keep-alive and pings, and any
+  HTTPS request it makes (e.g. the voice-language list)
+
 ## 0.1.7
 
 - A factory-reset robot now reconnects. After a reset the Max registers without its serial
