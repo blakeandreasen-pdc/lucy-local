@@ -162,15 +162,6 @@ The video itself goes straight from the browser to `SERVER_IP:8189/udp`, so view
 
 There's **no login**. Anyone who can reach the web UI or the camera ports (8888, 8889, 8554) can drive the robot or watch its camera. Keep it on your LAN, or put it behind a proxy that restricts who can reach it. The robot-facing ports use a self-signed certificate, because the robot doesn't verify it.
 
-## Development
-
-```sh
-python3 -m venv .venv && .venv/bin/pip install -e .
-SERVER_IP=127.0.0.1 DATA_DIR=./data HTTPS_PORT=0 WEB_PORT=8080 .venv/bin/python -m lucy_local
-```
-
-GitHub Actions builds the add-on image on every push that touches the server; bump `version` in `ha-addon/config.yaml` to ship it to Home Assistant.
-
 ## Credits and thanks
 
 lucy-local stands on other people's reverse-engineering. None of it would exist without them.
