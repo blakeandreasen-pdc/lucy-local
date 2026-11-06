@@ -85,8 +85,10 @@ The robot expects its servers on fixed ports, so keep the robot ports as they ar
   main buttons, suction, volume and voice settings.
 - **Drive**: a joystick with the camera; also arrow keys or WASD. The robot stops by
   itself if the page loses contact.
-- **Settings**: the control profile (which command each button sends, with a live test
-  button), schedules, suction presets, and the optional MQTT bridge.
+- **Profiles**: try any command and watch the robot's reply, and edit which command each
+  button sends. Your own actions show on the dashboard under Extra.
+- **Settings**: schedules, Wi-Fi setup (a QR code the robot scans to join your Wi-Fi),
+  suction presets, and the optional MQTT bridge.
 
 The camera video goes straight from your browser to UDP 8189 on this host, so watching it
 from outside your home needs a VPN back in.

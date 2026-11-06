@@ -74,7 +74,7 @@ function topbar(active) {
   const link = (href, label, key) => h('a', {href, class: active === key ? 'on' : null}, label);
   const bar = h('header', {class: 'topbar'},
     h('div', {class: 'brand'}, '🧹 lucy-local'),
-    h('nav', {class: 'nav'}, link('./', 'Dashboard', 'home'), link('drive', 'Drive', 'drive'), link('settings', 'Settings', 'settings')),
+    h('nav', {class: 'nav'}, link('./', 'Dashboard', 'home'), link('drive', 'Drive', 'drive'), link('profiles', 'Profiles', 'profiles'), link('settings', 'Settings', 'settings')),
     h('span', {class: 'grow'}),
     h('div', {class: 'chips'},
       h('span', {class: 'chip'}, h('span', {class: 'dot', id: 'conn-dot'}), h('span', {id: 'conn'}, '…')),

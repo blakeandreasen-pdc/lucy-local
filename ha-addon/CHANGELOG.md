@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.6
+
+- New **Profiles** tab: **Try a command** and the profile editor moved here from Settings, which
+  now holds the schedule, Wi-Fi setup and the MQTT bridge
+
 ## 0.1.5
 
 - Settings: **Wi-Fi setup** card. Enter your Wi-Fi name and password and it shows the QR code

@@ -6,29 +6,11 @@
 <title>Settings · lucy-local</title>
 <link rel="stylesheet" href="static/app.css">
 <style>
-.cmd-row { display: grid; grid-template-columns: 70px minmax(0, 1fr) minmax(0, 1fr) 58px auto auto; gap: 6px; align-items: center; }
-.cmd-row.dp { grid-template-columns: 70px 58px minmax(0, 2fr) auto auto; }
-.action { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
-.action:last-child { border-bottom: 0; }
-.action .name { display: grid; gap: 4px; align-content: start; }
-.action .name code { color: var(--muted); font-size: 11px; }
-.cmds { display: grid; gap: 6px; }
-.opts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; color: var(--muted); }
-.opts input { width: 72px; }
-.opts .choice-row input { width: 100%; }
-.choice-row { max-width: 420px; }
-.choice-row { display: grid; grid-template-columns: 90px minmax(0, 1fr) auto; gap: 6px; }
 .group-title { margin-top: 6px; }
-.status-row { display: grid; grid-template-columns: 90px minmax(0, 1fr) auto; gap: 6px; }
 .days { display: flex; gap: 4px; flex-wrap: wrap; }
 .days label { display: inline-flex; gap: 3px; align-items: center; font-size: 12px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; }
 .form-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
 .note { font-size: 12px; color: var(--muted); }
-.banner { padding: 10px 12px; border-radius: 10px; background: rgba(79, 140, 255, .1); border: 1px solid rgba(79, 140, 255, .35); font-size: 13px; }
-.tester { display: grid; grid-template-columns: 80px minmax(0, 1fr) minmax(0, 1fr) 70px auto; gap: 8px; align-items: end; }
-.tester.dp { grid-template-columns: 80px 80px minmax(0, 2fr) auto; }
-.log div.hit { color: var(--ok); }
-.waiting { font-size: 12px; color: var(--muted); }
 .wifi-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
 .qr-box { background: #fff; border-radius: 12px; padding: 12px; display: grid; place-items: center; min-height: 220px; color: #555; font-size: 13px; text-align: center; }
 .qr-box svg { width: 100%; max-width: 360px; height: auto; display: block; }
@@ -37,54 +19,12 @@
 #qr-full svg { width: min(92vw, 92vh); height: auto; }
 #qr-full p { position: absolute; bottom: 16px; left: 0; right: 0; text-align: center; color: #666; font-size: 13px; margin: 0; }
 @media (max-width: 720px) {
-  .action { grid-template-columns: minmax(0, 1fr); }
-  .cmd-row, .cmd-row.dp, .tester, .tester.dp { grid-template-columns: 1fr 1fr; }
   .wifi-grid { grid-template-columns: minmax(0, 1fr); }
 }
 </style>
 </head>
 <body>
 <main class="page">
-  <section class="card" id="tester">
-    <h2>Try a command</h2>
-    <p class="note">Send any command to the robot to see what it does, without touching a profile. <b>rx</b> is the app's command channel (a command name, its data and a key); <b>dp</b> is the smart-speaker channel (a data point id and a value). Start from one of the profile's actions or type your own. The Max often answers 1-2 minutes later; replies appear below as they arrive.</p>
-    <label class="field" style="max-width:360px">Start from<select id="t-from"></select></label>
-    <div class="tester" id="t-row"></div>
-    <div class="row">
-      <span class="waiting grow" id="t-wait"></span>
-      <button id="t-add" class="ghost">Add to profile…</button>
-    </div>
-    <div>
-      <h3 class="group-title">Robot replies</h3>
-      <div class="log" id="replies"></div>
-    </div>
-  </section>
-
-  <section class="card" id="profile">
-    <div class="card-head">
-      <h2>Robot profile</h2><span class="grow"></span>
-      <select id="prof-select" aria-label="Profile"></select>
-      <button id="prof-use" class="primary">Use this profile</button>
-    </div>
-    <p class="note">A profile says which command each control sends, because models differ: on a Trifo Max reverse is <code>ANGLE:10</code>, on a Lucy <code>ANGLE:8</code>. Put <code>{value}</code> where a number or choice goes (volume, suction, language). <b>Test</b> sends that one command now.</p>
-    <div id="prof-banner" class="banner" hidden></div>
-    <div id="prof-body"></div>
-    <div class="row"><button id="add-action" class="ghost">+ Add action</button><span class="note">New actions appear on the dashboard under Extra.</span></div>
-    <div>
-      <h3 class="group-title">Status names</h3>
-      <p class="note">The robot reports a number. Name it here (the dashboard shows "state N" for unknown codes).</p>
-      <div id="status-names" style="display:grid;gap:6px"></div>
-      <div class="row" style="margin-top:6px"><button id="add-status" class="ghost">+ Add code</button></div>
-    </div>
-    <div class="row">
-      <button id="prof-copy">Duplicate…</button>
-      <button id="prof-delete" class="ghost">Delete</button>
-      <span class="grow"></span>
-      <span class="note" id="dirty"></span>
-      <button id="prof-save" class="primary">Save profile</button>
-    </div>
-  </section>
-
   <section class="card" id="schedule">
     <h2>Schedule</h2>
     <table><thead><tr><th>Time</th><th>Days</th><th>Action</th><th>Value</th><th>On</th><th></th></tr></thead><tbody id="sched-body"></tbody></table>
@@ -149,313 +89,21 @@
 topbar('settings');
 liveStatus();
 
-const GROUPS = {basic: 'Basic', settings: 'Settings', extra: 'Extra (your own)', drive: 'Driving', manual: 'Manual mode', camera: 'Camera', status: 'Status'};
-let store = null, editing = null, dirty = false;
-const blankCmd = () => ({type: 'rx', cmd: '', data: '', key: '2', dp: 2, value: ''});
-const slug = (t) => t.toLowerCase().replace(/[^a-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 32);
-
-function markDirty(v = true) {
-  dirty = v;
-  $('dirty').textContent = v ? (editing.builtin ? 'Changed: saving makes your own copy' : 'Unsaved changes') : '';
-}
-
-async function loadProfiles(selectId) {
-  store = await api('api/profiles');
-  const sel = $('prof-select');
-  sel.replaceChildren(...Object.values(store.profiles).map((p) =>
-    h('option', {value: p.id}, p.name + (p.builtin ? ' (built-in)' : '') + (p.id === store.active ? ' ✓ in use' : ''))));
-  sel.value = selectId || store.active;
-  dirty = false;
-  edit(sel.value);
-  fillScheduleActions();
-  fillTesterFrom();
-}
-
-function edit(id) {
-  if (dirty && !confirm('Discard unsaved changes?')) { $('prof-select').value = editing.id; return; }
-  editing = structuredClone(store.profiles[id]);
-  markDirty(false);
-  const bi = editing.builtin;
-  $('prof-banner').hidden = !bi;
-  $('prof-banner').textContent = 'This is a built-in profile. You can change anything below; saving keeps the built-in as shipped (so updates can fix it) and saves your version as a new profile.';
-  $('prof-use').disabled = id === store.active;
-  $('prof-save').textContent = bi ? 'Save as my profile…' : 'Save profile';
-  $('prof-delete').disabled = bi;
-  renderActions();
-  renderStatusNames();
-}
-$('prof-select').onchange = (e) => edit(e.target.value);
-
-function renderActions() {
-  const body = $('prof-body');
-  body.replaceChildren();
-  for (const [g, title] of Object.entries(GROUPS)) {
-    const names = Object.keys(editing.actions).filter((n) => editing.actions[n].group === g);
-    if (!names.length) continue;
-    body.append(h('h3', {class: 'group-title'}, title));
-    for (const n of names) body.append(renderAction(n, editing.actions[n]));
-  }
-}
-
-function num(v) { return v === '' || v == null ? null : +v; }
-
-// value options: none, a number range, or a fixed list (a dropdown)
-function renderValue(a, box) {
-  const kind = a.choices ? 'list' : a.takes_value ? 'number' : 'none';
-  const sel = h('select', {'aria-label': 'Value', onchange: (e) => {
-    const k = e.target.value;
-    a.takes_value = k === 'number';
-    if (k === 'number') { a.choices = null; a.min ??= 0; a.max ??= 100; }
-    else if (k === 'list') { a.choices = a.choices || {'0': 'Off', '1': 'On'}; a.min = a.max = null; }
-    else { a.choices = null; a.min = a.max = null; }
-    markDirty(); renderValue(a, box);
-  }}, h('option', {value: 'none'}, 'No value'), h('option', {value: 'number'}, 'Number'), h('option', {value: 'list'}, 'List of choices'));
-  sel.value = kind;
-  const parts = [sel];
-  if (kind === 'number') {
-    parts.push('from', h('input', {type: 'number', value: a.min ?? '', 'aria-label': 'Minimum', oninput: (e) => { a.min = num(e.target.value); markDirty(); }}),
-      'to', h('input', {type: 'number', value: a.max ?? '', 'aria-label': 'Maximum', oninput: (e) => { a.max = num(e.target.value); markDirty(); }}));
-  }
-  const rows = [];
-  if (kind === 'list') {
-    const entries = Object.entries(a.choices);
-    const save = () => {
-      const out = {};
-      rows.forEach(([v, l]) => { if (v.value.trim() !== '') out[v.value.trim()] = l.value.trim() || v.value.trim(); });
-      a.choices = out; markDirty();
-    };
-    const row = (v, l) => {
-      const vi = h('input', {value: v, placeholder: 'sent', 'aria-label': 'Value sent', oninput: save});
-      const li = h('input', {value: l, placeholder: 'shown as', 'aria-label': 'Label', oninput: save});
-      const pair = [vi, li];
-      rows.push(pair);
-      const el = h('div', {class: 'choice-row'}, vi, li, h('button', {class: 'ghost small', title: 'Remove', onclick: () => {
-        rows.splice(rows.indexOf(pair), 1); el.remove(); save();
-      }}, '✕'));
-      return el;
-    };
-    const list = h('div', {style: 'display:grid;gap:4px;width:100%'}, entries.map(([v, l]) => row(v, l)));
-    parts.push(list, h('button', {class: 'ghost small', onclick: () => list.append(row('', ''))}, '+ choice'));
-  }
-  box.replaceChildren(...parts);
-}
-
-function renderAction(name, a) {
-  const cmds = h('div', {class: 'cmds'});
-  const redraw = () => cmds.replaceChildren(...a.commands.map((c, i) => cmdRow(a, c, i, redraw)),
-    h('div', {}, h('button', {class: 'ghost small', onclick: () => { a.commands.push(blankCmd()); markDirty(); redraw(); }}, '+ command')));
-  redraw();
-  const opts = h('div', {class: 'opts'});
-  renderValue(a, opts);
-  const el = h('div', {class: 'action'},
-    h('div', {class: 'name'},
-      h('input', {value: a.label, 'aria-label': 'Label', oninput: (e) => { a.label = e.target.value; markDirty(); }}),
-      h('code', {}, name),
-      a.group === 'extra' ? h('button', {class: 'ghost small', onclick: () => {
-        if (!confirm('Remove action "' + a.label + '"?')) return;
-        delete editing.actions[name]; markDirty(); renderActions();
-      }}, 'Remove action') : ''),
-    h('div', {style: 'display:grid;gap:8px'}, cmds, opts));
-  return el;
-}
-
-function cmdRow(a, c, i, redraw) {
-  const inp = (key, ph) => h('input', {value: c[key] ?? '', placeholder: ph, 'aria-label': ph,
-    oninput: (e) => { c[key] = key === 'dp' ? +e.target.value : e.target.value; markDirty(); }});
-  const type = h('select', {'aria-label': 'Type', onchange: (e) => { c.type = e.target.value; markDirty(); redraw(); }},
-    h('option', {value: 'rx'}, 'rx'), h('option', {value: 'dp'}, 'dp'));
-  type.value = c.type;
-  const test = h('button', {class: 'small', onclick: () => sendCmd(c)}, 'Test');
-  const del = h('button', {class: 'ghost small', title: 'Remove', onclick: () => { a.commands.splice(i, 1); markDirty(); redraw(); }}, '✕');
-  return c.type === 'dp'
-    ? h('div', {class: 'cmd-row dp'}, type, inp('dp', 'dp id'), inp('value', 'value, e.g. start'), test, del)
-    : h('div', {class: 'cmd-row'}, type, inp('cmd', 'cmd, e.g. MANCTRL'), inp('data', 'data, e.g. ANGLE:4'), inp('key', 'key'), test, del);
-}
-
-// ---------------------------------------------------------------- tester
-const tcmd = blankCmd();
-let waitFor = null;   // {cmd, after, at}
-
-function renderTester() {
-  const inp = (key, label, ph) => h('label', {class: 'field'}, label, h('input', {value: tcmd[key] ?? '', placeholder: ph,
-    oninput: (e) => { tcmd[key] = key === 'dp' ? +e.target.value : e.target.value; }, onkeydown: (e) => { if (e.key === 'Enter') sendCmd(tcmd); }}));
-  const type = h('select', {onchange: (e) => { tcmd.type = e.target.value; renderTester(); }},
-    h('option', {value: 'rx'}, 'rx'), h('option', {value: 'dp'}, 'dp'));
-  type.value = tcmd.type;
-  const send = h('button', {class: 'primary', onclick: () => sendCmd(tcmd)}, 'Send');
-  const row = $('t-row');
-  row.className = 'tester' + (tcmd.type === 'dp' ? ' dp' : '');
-  row.replaceChildren(h('label', {class: 'field'}, 'Type', type),
-    ...(tcmd.type === 'dp'
-      ? [inp('dp', 'dp id', '2'), inp('value', 'Value', 'e.g. start')]
-      : [inp('cmd', 'Command', 'e.g. ALL_INFO'), inp('data', 'Data', 'often empty'), inp('key', 'Key', '2')]),
-    send);
-}
-
-function fillTesterFrom() {
-  const acts = store.profiles[store.active].actions;
-  const opts = [h('option', {value: ''}, 'Blank')];
-  for (const [n, a] of Object.entries(acts)) a.commands.forEach((c, i) =>
-    opts.push(h('option', {value: n + '#' + i}, a.label + (a.commands.length > 1 ? ' (' + (i + 1) + ')' : '') + ' · ' + (c.type === 'rx' ? c.cmd + (c.data ? ' ' + c.data : '') : 'dp ' + c.value))));
-  $('t-from').replaceChildren(...opts);
-}
-$('t-from').onchange = (e) => {
-  const v = e.target.value;
-  if (!v) Object.assign(tcmd, blankCmd());
-  else { const [n, i] = v.split('#'); Object.assign(tcmd, blankCmd(), structuredClone(store.profiles[store.active].actions[n].commands[+i])); }
-  renderTester();
-};
-
-async function sendCmd(c) {
-  const cmd = structuredClone(c);
-  if (cmd.type === 'rx' && !cmd.cmd.trim()) return toast('Enter a command', true);
-  if (cmd.type === 'dp' && !String(cmd.value).trim()) return toast('Enter a value', true);
-  if ((cmd.value || '').includes('{value}') || (cmd.data || '').includes('{value}')) {
-    const v = prompt('Value to put in place of {value}', '50');
-    if (v === null) return;
-    cmd.value = (cmd.value || '').replaceAll('{value}', v);
-    cmd.data = (cmd.data || '').replaceAll('{value}', v);
-  }
-  if (cmd.type === 'rx' && /^MANCTRL$/i.test(cmd.cmd) && /^ANGLE:\d/.test(cmd.data) &&
-      !confirm('This makes the robot move for about 2 seconds, and only works in manual mode (send MANCTRL S first). Send?')) return;
-  const before = lastReplies.length ? lastReplies[lastReplies.length - 1].ts : '';
-  try {
-    await api('api/send', {body: cmd});
-    toast('Sent');
-    waitFor = cmd.type === 'rx' ? {cmd: cmd.cmd.trim().toUpperCase(), after: before, at: Date.now()} : null;
-    pollReplies();
-  } catch (e) { toast(e.message, true); }
-}
-
-let lastReplies = [];
-function showReplies(rs) {
-  lastReplies = rs;
-  let got = false;
-  $('replies').replaceChildren(...rs.slice().reverse().map((r) => {
-    const hit = waitFor && r.ts > waitFor.after && r.cmd.toUpperCase().startsWith(waitFor.cmd);
-    got = got || hit;
-    return h('div', {class: hit ? 'hit' : null}, r.ts.slice(11) + '  ' + r.cmd + (r.data ? ' = ' + r.data : '') + '  (key ' + r.key + ')');
-  }));
-  if (!rs.length) $('replies').append(h('div', {class: 'muted'}, 'No replies yet.'));
-  if (waitFor && got) { $('t-wait').textContent = 'Reply to ' + waitFor.cmd + ' after ' + Math.round((Date.now() - waitFor.at) / 1000) + ' s (green).'; waitFor = null; }
-}
-async function pollReplies() {
-  if (document.hidden) return;
-  try { showReplies(await api('api/responses?limit=30')); } catch (_) {}
-  if (waitFor) {
-    const s = Math.round((Date.now() - waitFor.at) / 1000);
-    $('t-wait').textContent = s > 300 ? 'No reply to ' + waitFor.cmd + ' after 5 minutes. The robot may not know it.' : 'Waiting for a reply to ' + waitFor.cmd + '… ' + s + ' s';
-    if (s > 300) waitFor = null;
-  }
-}
-setInterval(pollReplies, 3000);
-
-$('t-add').onclick = () => {
-  if (tcmd.type === 'rx' ? !tcmd.cmd.trim() : !String(tcmd.value).trim()) return toast('Fill in a command first', true);
-  const label = prompt('Name for the new action (shown on its button)', tcmd.cmd || 'My action');
-  if (!label) return;
-  addAction(label, structuredClone(tcmd));
-  $('profile').scrollIntoView({behavior: 'smooth'});
-};
-
-function addAction(label, cmd) {
-  let name = slug(label) || 'action', n = 2;
-  while (editing.actions[name]) name = slug(label) + '_' + n++;
-  const takes = (cmd.data || '').includes('{value}') || (cmd.value || '').includes('{value}');
-  editing.actions[name] = {label, group: 'extra', commands: [cmd], takes_value: takes, min: takes ? 0 : null, max: takes ? 100 : null, choices: null};
-  markDirty(); renderActions();
-  toast('Added "' + label + '". Save the profile to keep it.');
-}
-$('add-action').onclick = () => {
-  const label = prompt('Name for the new action (shown on its button)');
-  if (label) addAction(label, blankCmd());
-};
-
-// ---------------------------------------------------------------- status names
-function renderStatusNames() {
-  const box = $('status-names');
-  const rows = Object.entries(editing.status_names).sort((a, b) => +a[0] - +b[0]);
-  box.replaceChildren(...rows.map(([code, name]) => {
-    const codeIn = h('input', {value: code, 'aria-label': 'Code'});
-    const nameIn = h('input', {value: name, 'aria-label': 'Name'});
-    const sync = () => { collectStatus(); markDirty(); };
-    codeIn.oninput = sync; nameIn.oninput = sync;
-    return h('div', {class: 'status-row', 'data-row': ''}, codeIn, nameIn,
-      h('button', {class: 'ghost small', onclick: (e) => { e.target.closest('[data-row]').remove(); collectStatus(); markDirty(); }}, '✕'));
-  }));
-}
-function collectStatus() {
-  const out = {};
-  document.querySelectorAll('#status-names [data-row]').forEach((r) => {
-    const [c, n] = r.querySelectorAll('input');
-    if (c.value.trim()) out[c.value.trim()] = n.value.trim();
-  });
-  editing.status_names = out;
-}
-$('add-status').onclick = () => { collectStatus(); editing.status_names[''] = ''; renderStatusNames(); };
-
-// ---------------------------------------------------------------- save / copy / use / delete
-async function saveAs(name) {
-  const id = slug(name).replace(/_/g, '-') || 'custom';
-  if (store.profiles[id]) { toast('A profile with id "' + id + '" exists already', true); return null; }
-  const copy = {...structuredClone(editing), id, name, builtin: false};
-  await api('api/profiles/' + id, {method: 'PUT', body: copy});
-  return id;
-}
-async function offerUse(id, name) {
-  if (id !== store.active && confirm('Saved "' + name + '". Use it now?')) await api('api/profiles/active', {body: {id}});
-  dirty = false;
-  await loadProfiles(id);
-}
-$('prof-use').onclick = async () => {
-  if (dirty) return toast('Save your changes first', true);
-  try { await api('api/profiles/active', {body: {id: editing.id}}); toast('Now using ' + editing.name); await loadProfiles(editing.id); }
-  catch (e) { toast(e.message, true); }
-};
-$('prof-copy').onclick = async () => {
-  const name = prompt('Name for the copy', editing.name + ' (copy)');
-  if (!name) return;
-  collectStatus();
-  try { const id = await saveAs(name); if (id) await offerUse(id, name); } catch (e) { toast(e.message, true); }
-};
-$('prof-save').onclick = async () => {
-  collectStatus();
-  try {
-    if (editing.builtin) {
-      const name = prompt('Name for your profile', editing.name + ' (mine)');
-      if (!name) return;
-      const id = await saveAs(name);
-      if (id) await offerUse(id, name);
-    } else {
-      await api('api/profiles/' + editing.id, {method: 'PUT', body: editing});
-      toast('Profile saved' + (editing.id === store.active ? '' : '. Choose "Use this profile" to switch to it.'));
-      dirty = false;
-      await loadProfiles(editing.id);
-    }
-  } catch (e) { toast(e.message, true); }
-};
-$('prof-delete').onclick = async () => {
-  if (!confirm('Delete profile "' + editing.name + '"?')) return;
-  try { await api('api/profiles/' + editing.id, {method: 'DELETE'}); dirty = false; toast('Deleted'); await loadProfiles(); }
-  catch (e) { toast(e.message, true); }
-};
-window.addEventListener('beforeunload', (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
-renderTester();
+let actions = {};
 
 // ---------------------------------------------------------------- schedule
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 $('s-days').replaceChildren(...DAYS.map((d, i) => h('label', {}, h('input', {type: 'checkbox', value: i, checked: true}), d)));
 
 function fillScheduleActions() {
-  const active = store.profiles[store.active];
-  $('s-action').replaceChildren(...Object.entries(active.actions)
+  $('s-action').replaceChildren(...Object.entries(actions)
     .filter(([, a]) => ['basic', 'settings', 'extra'].includes(a.group) && !a.choices)
     .map(([n, a]) => h('option', {value: n}, a.label)));
 }
 
 async function loadSchedule() {
   const s = await api('api/schedule');
-  const labels = store ? store.profiles[store.active].actions : {};
+  const labels = actions;
   $('sched-body').replaceChildren(...(s.entries.length ? s.entries.map((e) => h('tr', {},
     h('td', {}, e.time),
     h('td', {}, e.days.length === 7 ? 'Every day' : e.days.map((d) => DAYS[d]).join(' ')),
@@ -543,8 +191,8 @@ async function haStatus() {
 }
 
 (async () => {
-  await loadProfiles();
-  pollReplies();
+  actions = await api('api/actions').catch(() => ({}));
+  fillScheduleActions();
   await Promise.all([loadSchedule(), loadSettings()]);
   haStatus(); setInterval(haStatus, 10000);
   if (location.hash) document.querySelector(location.hash)?.scrollIntoView();

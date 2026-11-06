@@ -40,7 +40,7 @@ None of it needs the internet.
   bridge is there too if you prefer that.
 - **Control profiles and a command tester:** models differ in small ways, so each control is
   mapped to the command your robot accepts. Built in: the **Trifo Max** (tested) and the **Trifo
-  Lucy** (from the upstream research). You can try any command from the Settings page and add the
+  Lucy** (from the upstream research). You can try any command from the Profiles page and add the
   ones that work.
 - **Talk** through the robot's speaker (Lucy profile only; the Max has no working speaker stream).
 
@@ -101,8 +101,9 @@ uses it for update checks. The add-on's Documentation tab has the details.
 | 8554 | the camera over RTSP (`rtsp://<host>:8554/lucy`, used by the Home Assistant integration) |
 | 8110 | the web UI and API (`/api/docs` lists every endpoint) |
 
-The robot must already be on your Wi-Fi. If it isn't, see the upstream project's
-[Wi-Fi setup without the app](https://github.com/Gophercs/trifo_lucy_re#wifi-setup-without-app).
+The robot must be on your Wi-Fi. If it isn't (new, reset, or never set up), use
+**Settings → Wi-Fi setup**: it shows the QR code the robot scans in network-configuration mode,
+the same one the Trifo app made. Open it on your phone and hold the code up to the robot's camera.
 
 ## Control profiles
 
@@ -111,7 +112,7 @@ Each control is an **action** (for example `reverse`, `set_suction` or `camera_w
 - `dp`: a smart-speaker data point, e.g. `dp 2 = start`, or `blowerMode:{value}`
 - `rx`: an app command, e.g. `MANCTRL` / `ANGLE:4` on key `2`
 
-On **Settings**, **Try a command** sends any command and shows the robot's reply as it arrives (the Max can take 1–2 minutes). Every profile field is editable; saving a built-in profile saves your own copy, so the built-ins stay as shipped and updates can fix them. Actions can take a number or a list of choices, and actions you add appear on the dashboard under **Extra**.
+On **Profiles**, **Try a command** sends any command and shows the robot's reply as it arrives (the Max can take 1–2 minutes). Every profile field is editable; saving a built-in profile saves your own copy, so the built-ins stay as shipped and updates can fix them. Actions can take a number or a list of choices, and actions you add appear on the dashboard under **Extra**.
 
 | | Trifo Max | Trifo Lucy |
 |---|---|---|

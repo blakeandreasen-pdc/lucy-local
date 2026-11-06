@@ -381,5 +381,9 @@ def create_app(robot: Robot, profiles: ProfileStore, driver: Driver, scheduler: 
     def settings_page():
         return FileResponse(WEB / "settings.html")
 
+    @app.get("/profiles", include_in_schema=False)
+    def profiles_page():
+        return FileResponse(WEB / "profiles.html")
+
     app.mount("/static", StaticFiles(directory=WEB), name="static")
     return app
